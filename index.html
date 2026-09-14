@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GameBox</title>
+<meta name="theme-color" content="#17181c" />
+<link rel="manifest" href="manifest.json" />
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body, #root { margin: 0; padding: 0; height: 100%; }
+  body { -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+  input, textarea { font-family: inherit; }
+  #offline-banner {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+    background: #2c2f36; color: #eceef1; font-family: sans-serif; font-size: 12.5px;
+    text-align: center; padding: 6px 10px;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
+  }
+}
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="offline-banner">You're offline — playing from the saved version.</div>
+<div id="root"></div>
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom/client";
+import {
+  Home, Compass, Users, Settings, ChevronLeft, ChevronRight, Plus, Minus,
+  Eye, EyeOff, Play, X, Check, Copy, Crown, Skull, Search, Flame,
+  Sparkles, Timer, RotateCcw, UserPlus, Trash2, Lock, LogOut, User,
+  Gamepad2, Drama, MessageCircleQuestion, Shuffle, Moon, Grid3x3,
+  BookOpen, HelpCircle, FolderPlus, ChevronDown, Send
+} from "lucide-react";
+
+const THEMES = {
+  dark: {
+    name: "Dark", bg: "#17181c",
+    bgGrad: "radial-gradient(1200px 600px at 50% -10%, #23252c 0%, #17181c 55%)",
+    surface: "#1f2126", surfaceAlt: "#26282f", border: "#33353d",
+    text: "#eceef1", textDim: "#8b8e98",
+    accent: "#7c8cff", accent2: "#ff6b6b",
+    font: "'Space Grotesk', sans-serif", radius: "18px",
+  },
+  classroom: {
+    name: "Classroom", bg: "#f4efe3",
+    bgGrad: "radial-gradient(1200px 600px at 50% -10%, #fbf7ec 0%, #f4efe3 55%)",
+    surface: "#fffdf8", surfaceAlt: "#ece4d0", border: "#ddd2b6",
+    text: "#2c2416", textDim: "#7a6f57",
+    accent: "#b5502e", accent2: "#2f6b4f",
+    font: "'Fraunces', serif", radius: "10px",
+  },
+  arena: {
+    name: "Arena", bg: "#0a0e14",
+    bgGrad: "linear-gradient(160deg, #0a0e14 0%, #131a26 45%, #0a0e14 100%)",
+    surface: "#111722", surfaceAlt: "#161f2d", border: "#1f2c3f",
+    text: "#e7f6ff", textDim: "#6f8398",
+    accent: "#00e5c7", accent2: "#ff3d6e",
+    font: "'Orbitron', sans-serif", radius: "6px",
+  },
+  fireplace: {
+    name: "Fireplace", bg: "#1c1310",
+    bgGrad: "radial-gradient(1000px 600px at 50% 110%, #4a2313 0%, #1c1310 60%)",
+    surface: "#271b16", surfaceAlt: "#31221b", border: "#4a342a",
+    text: "#f3e4d3", textDim: "#b0876c",
+    accent: "#e5772d", accent2: "#c9412a",
+    font: "'Fraunces', serif", radius: "16px",
+  },
+};
+
+function useFonts() {
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:ital,wght@0,400;0,600;0,700;1,500&family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap";
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
+}
+
+const CORE_GAMES = [
+  { id: "mafia", name: "Mafia", tagline: "Trust no one.", icon: Skull, color: "#7c8cff" },
+  { id: "imposter", name: "Imposter", tagline: "One of you doesn't belong.", icon: Search, color: "#ff6b6b" },
+  { id: "charades", name: "Charades", tagline: "Heads up, act it out.", icon: Drama, color: "#00e5c7" },
+  { id: "truthdare", name: "Truth & Dare", tagline: "Choose wisely.", icon: MessageCircleQuestion, color: "#e5772d" },
+];
+
+const EXPLORE_GAMES = [
+  { id: "werewolf", name: "Werewolf", tagline: "A moonlit twist on Mafia.", desc: "A moonlit twist on Mafia with a Seer instead of a Detective.", price: "Free", icon: Moon, color: "#9d7cff" },
+  { id: "codenames", name: "Codenames Party", tagline: "Guess your team's words first.", desc: "Split into two teams, guess the secret words on the board.", price: "$2.99", icon: Grid3x3, color: "#00e5c7" },
+  { id: "wyr", name: "Would You Rather", tagline: "Impossible choices.", desc: "Impossible choices, endless debate.", price: "Free", icon: HelpCircle, color: "#e5772d" },
+  { id: "storychain", name: "Story Chain", tagline: "Build an absurd story together.", desc: "Build an absurd story one line at a time.", price: "$1.99", icon: BookOpen, color: "#ff6b6b" },
+  { id: "nhie", name: "Never Have I Ever", tagline: "Confess if you've done it.", desc: "Spin to pick who reads the next confession — everyone else answers honestly.", price: "Free", icon: Flame, color: "#f7c948" },
+];
+
+const WORD_BANK = {
+  Animals: ["Elephant", "Penguin", "Octopus", "Giraffe", "Kangaroo", "Dolphin", "Cheetah", "Owl", "Platypus", "Flamingo", "Otter", "Peacock"],
+  "Daily Life": ["Toothbrush", "Umbrella", "Backpack", "Alarm clock", "Coffee mug", "Sneakers", "Doorbell", "Pillow", "Wallet", "Charger", "Sunglasses", "Notebook"],
+  Movies: ["Titanic", "Inception", "Frozen", "Jaws", "Shrek", "Avatar", "Up", "Coco", "Moana", "Gladiator", "Matrix", "Toy Story"],
+  "TV Shows": ["Friends", "The Office", "Breaking Bad", "Stranger Things", "The Simpsons", "Money Heist", "Sherlock", "The Crown", "Squid Game", "Brooklyn Nine-Nine", "Peaky Blinders", "The Mandalorian"],
+  Food: ["Pizza", "Sushi", "Tacos", "Pancakes", "Spaghetti", "Popcorn", "Burger", "Dumplings", "Ice cream", "Waffles", "Curry", "Noodles"],
+  Sports: ["Basketball", "Surfing", "Tennis", "Boxing", "Skiing", "Archery", "Bowling", "Cricket", "Golf", "Rowing", "Fencing", "Volleyball"],
+  Jobs: ["Firefighter", "Astronaut", "Chef", "Dentist", "Pilot", "Farmer", "Photographer", "Electrician", "Lifeguard", "Tailor", "Librarian", "Zookeeper"],
+  Memes: ["Distracted boyfriend", "This is fine dog", "Doge", "Grumpy cat", "Rickroll", "Side-eye glance", "Crying at your desk", "Galaxy brain", "Slow clap", "Dramatic gasp", "Facepalm", "Mic drop"],
+};
+
+const CODENAMES_WORDS = ["Bridge", "Piano", "Comet", "Jungle", "Anchor", "Crown", "Marble", "Falcon", "Lantern", "Volcano", "Compass", "Velvet", "Rocket", "Glacier", "Harbor", "Thistle", "Mirror", "Ember", "Canyon", "Orbit", "Satin", "Beacon", "Ripple", "Quartz", "Nomad"];
+
+const TRUTHS = [
+  "What's a habit you have that most people don't know about?",
+  "What's the most embarrassing song on your playlist?",
+  "What's a lie you told that you never got caught for?",
+  "Who in this room would you trust with a secret first?",
+  "What's the last thing you searched on your phone?",
+  "What's a childhood fear you still secretly have?",
+  "What's the pettiest thing that's ever annoyed you?",
+  "What's a compliment you received that you still think about?",
+  "What's the worst gift you've ever received?",
+  "What app do you spend the most time on and why?",
+  "What's a food combo you like that others think is weird?",
+  "What's something you pretend to understand but don't?",
+  "What's the most trouble you ever got into as a kid?",
+  "What's a rumor you once believed was true?",
+  "What's the weirdest dream you remember having?",
+  "What's a talent you have that almost no one knows about?",
+  "What's the last thing that made you laugh until it hurt?",
+  "What's a purchase you regret the most?",
+  "What's something you're irrationally afraid of?",
+  "Who's the last person you stalked on social media and why?",
+  "What's the most embarrassing thing in your search history?",
+  "What's a nickname you've had that you hated?",
+  "What's the longest you've gone without showering, and why?",
+  "What's a promise you broke and never told anyone about?",
+  "What's the cringiest thing you did to impress someone?",
+  "If everyone in this room rated your cooking, what would they say?",
+  "What's a secret talent you're too shy to show off?",
+  "What's the most awkward first date you've ever been on?",
+  "What's a movie or show you pretend to have watched but haven't?",
+  "What's the weirdest thing you've Googled this month?",
+  "What's a fear you have about the future?",
+  "Who do you think is the funniest person in this room, besides yourself?",
+  "What's the most childish thing you still do?",
+  "What's an unpopular opinion you hold that could start an argument?",
+];
+
+const DARES = [
+  "Talk in an accent for the next three rounds.",
+  "Let the group pick your new nickname for the rest of the game.",
+  "Do your best impression of someone in the room.",
+  "Text a random contact 'I found the treasure' with no context.",
+  "Speak only in questions for the next two minutes.",
+  "Let another player style your hair for one round.",
+  "Do 15 jumping jacks right now.",
+  "Sing your next sentence instead of saying it.",
+  "Attempt to lick your elbow.",
+  "Let the group choose your profile picture for a day.",
+  "Hold a plank while answering the next question.",
+  "Do your best runway walk across the room.",
+  "Let the group draw on your face with a marker (washable only!).",
+  "Do your impression of a celebrity until someone guesses who it is.",
+  "Speak in rhymes for the next two rounds.",
+  "Let someone else post a status on your social media (with you watching).",
+  "Do a dramatic reading of your last five texts.",
+  "Attempt to touch your nose with your tongue.",
+  "Wear your clothes inside out for the next 15 minutes.",
+  "Do your best animal impression and have the group guess it.",
+  "Let the group pick a silly walk for you to use for the next round.",
+  "Try to make the person to your left laugh without touching them.",
+  "Recite the alphabet backwards as fast as you can.",
+  "Do a one-minute stand-up comedy bit, no matter how bad.",
+  "Balance a spoon on your nose for 30 seconds.",
+  "Let the group give you a new dance move to bust out right now.",
+  "Answer the next three questions in a whisper.",
+  "Do your best superhero pose and hold it for 20 seconds.",
+  "Let the group choose your ringtone for the rest of the night.",
+];
+
+const WOULD_YOU_RATHER = [
+  "Would you rather always have to sing instead of speak, or always have to whisper?",
+  "Would you rather never use social media again, or never watch another movie/show?",
+  "Would you rather have the ability to fly, or be invisible?",
+  "Would you rather live without music, or without your phone?",
+  "Would you rather always be 10 minutes late, or always be an hour early?",
+  "Would you rather know when you'll die, or how you'll die?",
+  "Would you rather give up sweets forever, or give up salty snacks forever?",
+  "Would you rather be famous but broke, or rich but unknown?",
+  "Would you rather relive your favorite year, or skip straight to next year?",
+  "Would you rather have unlimited money, or unlimited time?",
+];
+
+const CHARADES_CATEGORIES = ["Animals", "Movies", "TV Shows", "Memes", "Jobs", "Sports"];
+
+const NEVER_HAVE_I_EVER = [
+  "Never have I ever pretended to be sick to skip something.",
+  "Never have I ever stalked someone's social media for hours.",
+  "Never have I ever sent a text to the wrong person.",
+  "Never have I ever cried during a movie or show.",
+  "Never have I ever forgotten someone's name right after meeting them.",
+  "Never have I ever eaten food off the floor.",
+  "Never have I ever pretended to know a song I'd never heard.",
+  "Never have I ever laughed at something that wasn't funny just to fit in.",
+  "Never have I ever broken something and blamed someone else.",
+  "Never have I ever fallen asleep in a public place.",
+  "Never have I ever googled myself.",
+  "Never have I ever showed up somewhere on the wrong day.",
+  "Never have I ever pretended not to see someone to avoid talking to them.",
+  "Never have I ever rehearsed a conversation in my head before having it.",
+  "Never have I ever laughed so hard I cried in front of strangers.",
+  "Never have I ever lied about my age.",
+  "Never have I ever gone through someone else's phone without asking.",
+  "Never have I ever accidentally liked an old photo while stalking someone's profile.",
+  "Never have I ever pretended to be busy to get out of plans.",
+  "Never have I ever sung in the shower loud enough for others to hear.",
+  "Never have I ever taken credit for something I didn't do.",
+  "Never have I ever cried during a commercial.",
+  "Never have I ever ghosted someone.",
+  "Never have I ever pretended to like a gift I actually hated.",
+  "Never have I ever talked about someone right after they left the room.",
+  "Never have I ever had a crush on a friend's sibling.",
+  "Never have I ever walked into a glass door.",
+  "Never have I ever rewatched an entire show just for comfort.",
+  "Never have I ever sent a risky text and immediately regretted it.",
+];
+
+const DEFAULT_GROUPS = ["Family", "Cousins", "Friends"];
+
+function Card({ theme, children, style, onClick }) {
+  return (
+    <div onClick={onClick} style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function Button({ theme, children, onClick, variant = "primary", style, disabled, icon: Icon }) {
+  const base = {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+    fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 14.5, padding: "13px 20px",
+    borderRadius: theme.radius === "6px" ? "4px" : "999px", border: "none",
+    cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1,
+    transition: "transform .12s ease, opacity .12s ease, filter .12s ease",
+    letterSpacing: theme.name === "Arena" ? "0.03em" : "normal",
+  };
+  const variants = {
+    primary: { background: theme.accent, color: theme.name === "Classroom" ? "#fffdf8" : "#0a0a0a" },
+    secondary: { background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` },
+    ghost: { background: "transparent", color: theme.textDim, border: `1px solid ${theme.border}` },
+    danger: { background: "transparent", color: theme.accent2, border: `1px solid ${theme.accent2}55` },
+  };
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
+      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      style={{ ...base, ...variants[variant], ...style }}
+    >
+      {Icon && <Icon size={16} strokeWidth={2.4} />}
+      {children}
+    </button>
+  );
+}
+
+function ScreenHeader({ theme, title, subtitle, onBack, onInfo }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
+      {onBack && (
+        <button
+          onClick={onBack}
+          style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: "999px", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: theme.text, cursor: "pointer", flexShrink: 0 }}
+        >
+          <ChevronLeft size={19} />
+        </button>
+      )}
+      <div style={{ flex: 1 }}>
+        <h1 style={{ fontFamily: theme.font, fontSize: 25, fontWeight: 700, margin: 0, color: theme.text, letterSpacing: theme.name === "Arena" ? "0.02em" : "normal" }}>{title}</h1>
+        {subtitle && <p style={{ margin: "3px 0 0", fontSize: 13.5, color: theme.textDim, fontFamily: "Inter, sans-serif" }}>{subtitle}</p>}
+      </div>
+      {onInfo && (
+        <button
+          onClick={onInfo}
+          style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: "999px", width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", color: theme.text, cursor: "pointer", flexShrink: 0 }}
+        >
+          <HelpCircle size={18} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Modal({ theme, title, onClose, children }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 430, maxHeight: "80vh", overflowY: "auto", background: theme.surface, borderTop: `1px solid ${theme.border}`, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: "22px 20px calc(24px + env(safe-area-inset-bottom))" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <h2 style={{ fontFamily: theme.font, fontSize: 20, fontWeight: 700, color: theme.text, margin: 0 }}>{title}</h2>
+          <button onClick={onClose} style={{ background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: "999px", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", color: theme.text, cursor: "pointer" }}>
+            <X size={16} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const HOW_TO_PLAY = {
+  mafia: {
+    steps: [
+      "Add every player, then set how many are Mafia (there's always exactly one Detective).",
+      "Pass the device around — each player privately holds the button to see their role, then passes it on.",
+      "The host narrates 'night falls' — everyone closes their eyes. Mafia silently agree on who to eliminate.",
+      "The Detective secretly points to one player to investigate; the host tells them mafia or not, quietly.",
+      "'Day' begins — everyone discusses out loud and votes to eliminate one suspected player.",
+      "Repeat night and day until either all Mafia are voted out (Civilians win) or Mafia equal or outnumber the rest (Mafia win).",
+    ],
+  },
+  werewolf: {
+    steps: [
+      "Add every player, then set how many are Werewolves (there's always exactly one Seer).",
+      "Pass the device around — each player privately holds the button to see their role.",
+      "Host says 'night falls' — everyone closes eyes. Werewolves silently pick a victim together.",
+      "The Seer secretly points to one player; the host quietly confirms werewolf or not.",
+      "By day, everyone debates out loud and votes one player out.",
+      "Keep alternating night and day until the werewolves are all caught, or they equal the villagers left.",
+    ],
+  },
+  imposter: {
+    steps: [
+      "Pick a word category, add players, and set how many Imposters there should be.",
+      "Everyone gets the same secret word — except the Imposter(s), who get nothing.",
+      "Going around in order, each player says one word or short clue about the secret word without saying it outright.",
+      "Imposters have to bluff a believable clue despite not knowing the word.",
+      "After a round or two of clues, everyone votes on who they think the Imposter is.",
+      "Imposters win if they survive the vote (or guess the word if caught); everyone else wins by catching them.",
+    ],
+  },
+  truthdare: {
+    steps: [
+      "Add all the players.",
+      "Spin the wheel — whoever it lands on gets to choose.",
+      "Answer honestly, or complete the dare — group's honor system enforces it.",
+      "Spin again to keep the game going as long as you like.",
+    ],
+  },
+  charades: {
+    steps: [
+      "Pick a category and a timer length.",
+      "One player holds the phone facing outward (or up to their forehead) so only others can see the word.",
+      "Everyone else acts it out or describes it (per your house rules) without saying the word itself.",
+      "Tap Got it when guessed correctly, or Skip to move to the next word.",
+      "See your score when time runs out, then play again.",
+    ],
+  },
+  wyr: {
+    steps: [
+      "Add all the players.",
+      "Each round shows a Would You Rather question and names who answers first.",
+      "That player answers out loud, then everyone else weighs in and debates.",
+      "Tap Next question to keep going.",
+    ],
+  },
+  storychain: {
+    steps: [
+      "Add all the players.",
+      "The first player writes one sentence to start a story.",
+      "Each player takes turns adding the next sentence, building on what came before.",
+      "Once everyone's had at least one turn, tap Finish story to read the whole thing back.",
+    ],
+  },
+  codenames: {
+    steps: [
+      "Add at least 4 players — they're automatically split into two teams.",
+      "Each team's spymaster taps 'Spymaster: press to see colors' privately to view the hidden grid — then hides it again before their team looks.",
+      "Out loud, the spymaster gives one clue word plus a number, hinting at that many tiles.",
+      "Their team taps tiles to guess. Right team-color tile keeps the turn going toward that number; wrong tile ends their turn.",
+      "Tapping the black tile ends the game instantly for whoever taps it — avoid it!",
+      "First team to reveal all of their own tiles wins.",
+    ],
+  },
+  nhie: {
+    steps: [
+      "Add all the players.",
+      "Spin the wheel — whoever it lands on reads the next 'Never have I ever...' statement out loud.",
+      "Everyone else who HAS done that thing puts a finger down (or takes a sip, house rules apply).",
+      "Spin again for the next round and keep going.",
+    ],
+  },
+};
+
+function HowToPlayModal({ theme, gameId, onClose }) {
+  const meta = CORE_GAMES.find((g) => g.id === gameId) || EXPLORE_GAMES.find((g) => g.id === gameId);
+  const guide = HOW_TO_PLAY[gameId];
+  if (!guide) return null;
+  return (
+    <Modal theme={theme} title={`How to play ${meta.name}`} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {guide.steps.map((s, i) => (
+          <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ width: 22, height: 22, borderRadius: "50%", background: meta.color + "33", color: meta.color, fontFamily: "Inter, sans-serif", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+              {i + 1}
+            </div>
+            <p style={{ margin: 0, fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text, lineHeight: 1.5 }}>{s}</p>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+function genCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 5; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+function genId() {
+  return "u" + Math.random().toString(36).slice(2, 8);
+}
+function stepperBtn(theme, disabled) {
+  return { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, display: "flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.35 : 1 };
+}
+
+function PlayerSetup({ theme, minPlayers, onStart, gameColor, extraSettings, friends = [], groups = [], initialPlayers = [] }) {
+  const [players, setPlayers] = useState(initialPlayers);
+  const [name, setName] = useState("");
+  const code = useRef(genCode()).current;
+
+  const addPlayer = (nameToAdd) => {
+    const n = (nameToAdd ?? name).trim();
+    if (!n) return;
+    if (players.includes(n)) return;
+    setPlayers((p) => [...p, n]);
+    if (!nameToAdd) setName("");
+  };
+
+  const removePlayer = (i) => setPlayers((p) => p.filter((_, idx) => idx !== i));
+
+  const addGroup = (groupName) => {
+    const members = friends.filter((f) => f.groups.includes(groupName)).map((f) => f.name);
+    setPlayers((p) => {
+      const merged = [...p];
+      members.forEach((m) => { if (!merged.includes(m)) merged.push(m); });
+      return merged;
+    });
+  };
+
+  const nonAddedFriends = friends.filter((f) => !players.includes(f.name));
+  const groupsWithMembers = groups.filter((g) => friends.some((f) => f.groups.includes(g)));
+
+  return (
+    <div>
+      <Card theme={theme} style={{ padding: 18, marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Party code</div>
+          <div style={{ fontFamily: theme.font, fontSize: 26, fontWeight: 700, color: gameColor, letterSpacing: "0.1em" }}>{code}</div>
+        </div>
+        <Copy size={18} color={theme.textDim} style={{ cursor: "pointer" }} />
+      </Card>
+
+      {groupsWithMembers.length > 0 && (
+        <Card theme={theme} style={{ padding: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+            Quick add from a group
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {groupsWithMembers.map((g) => (
+              <button
+                key={g}
+                onClick={() => addGroup(g)}
+                style={{ padding: "8px 13px", borderRadius: "999px", fontSize: 12.5, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${gameColor}55`, background: gameColor + "1a", color: gameColor, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <Users size={12} /> {g} ({friends.filter((f) => f.groups.includes(g)).length})
+              </button>
+            ))}
+          </div>
+          {nonAddedFriends.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
+              {nonAddedFriends.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => addPlayer(f.name)}
+                  style={{ padding: "5px 11px", borderRadius: "999px", fontSize: 12, fontFamily: "Inter, sans-serif", fontWeight: 500, border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, cursor: "pointer" }}
+                >
+                  + {f.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+          placeholder="Add a player's name"
+          style={{ flex: 1, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "13px 16px", color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 14.5, outline: "none" }}
+        />
+        <Button theme={theme} onClick={() => addPlayer()} icon={UserPlus} style={{ padding: "0 18px" }}>Add</Button>
+      </div>
+
+      {players.length === 0 ? (
+        <p style={{ color: theme.textDim, fontSize: 13.5, fontFamily: "Inter, sans-serif", textAlign: "center", padding: "24px 0" }}>Add at least {minPlayers} players to start.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+          {players.map((p, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "11px 15px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 26, height: 26, borderRadius: "50%", background: gameColor + "33", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700, color: gameColor, fontFamily: "Inter, sans-serif" }}>
+                  {i === 0 && <Crown size={13} color={gameColor} />}
+                  {i !== 0 && p[0].toUpperCase()}
+                </div>
+                <span style={{ color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 14.5 }}>{p}</span>
+                {i === 0 && <span style={{ fontSize: 10.5, color: theme.textDim, fontFamily: "Inter, sans-serif" }}>HOST</span>}
+              </div>
+              <Trash2 size={15} color={theme.textDim} style={{ cursor: "pointer" }} onClick={() => removePlayer(i)} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {extraSettings && extraSettings(players.length)}
+
+      <Button theme={theme} disabled={players.length < minPlayers} onClick={() => onStart(players)} icon={Play} style={{ width: "100%", padding: "15px 20px", background: gameColor, marginTop: 8 }}>
+        Start game
+      </Button>
+    </div>
+  );
+}
+
+function RatioRow({ theme, label, value, onChange, color, locked }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px" }}>
+      <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => onChange(value - 1)} disabled={locked} style={stepperBtn(theme, locked)}><Minus size={13} /></button>
+        <span style={{ width: 18, textAlign: "center", fontWeight: 700, color, fontFamily: "Inter, sans-serif" }}>{value}</span>
+        <button onClick={() => onChange(value + 1)} disabled={locked} style={stepperBtn(theme, locked)}><Plus size={13} /></button>
+      </div>
+    </div>
+  );
+}
+
+function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isFirst }) {
+  const [held, setHeld] = useState(false);
+  const [flash, setFlash] = useState(false);
+
+  const handleNext = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 260);
+    onNext();
+  };
+  const handlePrev = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 260);
+    onPrev();
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0" }}>
+      <div style={{ width: "100%", maxWidth: 260, perspective: 1200, position: "relative" }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: theme.radius, background: theme.text, opacity: flash ? 0.3 : 0, transition: "opacity 130ms ease", pointerEvents: "none", zIndex: 5 }} />
+        <div
+          style={{
+            width: "100%", aspectRatio: "220 / 310", position: "relative", userSelect: "none",
+            transformStyle: "preserve-3d",
+            transform: held ? "rotateY(180deg)" : "rotateY(0deg)",
+            transition: "transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+          }}
+        >
+          <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", background: theme.surfaceAlt, border: `2px solid ${theme.border}`, borderRadius: theme.radius, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: theme.surface, border: `1px solid ${theme.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textDim }}>
+              <EyeOff size={24} />
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: theme.textDim, textAlign: "center", padding: "0 16px" }}>Hold the button below to reveal</div>
+          </div>
+
+          <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: theme.surface, border: `2px solid ${color}`, borderRadius: theme.radius, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, textAlign: "center" }}>
+            <Eye size={28} color={color} />
+            <div style={{ fontFamily: theme.font, fontSize: 24, fontWeight: 700, color: theme.text }}>{label}</div>
+            {sublabel && <p style={{ fontSize: 13, color: theme.textDim, margin: 0, lineHeight: 1.4, padding: "0 4px" }}>{sublabel}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div
+        onMouseDown={() => setHeld(true)} onMouseUp={() => setHeld(false)} onMouseLeave={() => setHeld(false)}
+        onTouchStart={(e) => { e.preventDefault(); setHeld(true); }} onTouchEnd={() => setHeld(false)}
+        style={{
+          marginTop: 18, width: 60, height: 60, borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+          background: held ? color : theme.surface, border: `2px solid ${held ? color : theme.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "background .15s ease, border-color .15s ease", touchAction: "none", userSelect: "none",
+        }}
+      >
+        {held ? <Eye size={22} color={theme.name === "Classroom" ? "#fffdf8" : "#0a0a0a"} /> : <EyeOff size={22} color={theme.textDim} />}
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+        {onPrev && (
+          <Button theme={theme} onClick={handlePrev} variant="ghost" disabled={isFirst} icon={ChevronLeft}>
+            Previous
+          </Button>
+        )}
+        <Button theme={theme} onClick={handleNext} variant="secondary" icon={isLast ? Check : ChevronRight}>
+          {isLast ? "Everyone's seen it" : "Next player"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function HostRoleSummary({ theme, players, roles, roleColor }) {
+  const [revealed, setRevealed] = useState(false);
+  if (!revealed) {
+    return (
+      <Card theme={theme} style={{ padding: 22, textAlign: "center", marginBottom: 20 }}>
+        <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13.5, color: theme.textDim, marginBottom: 16, lineHeight: 1.6 }}>
+          Pass the device to the host. Only they should see this.
+        </p>
+        <Button theme={theme} onClick={() => setRevealed(true)} icon={Eye} variant="secondary">
+          I'm the host — show me everyone's roles
+        </Button>
+      </Card>
+    );
+  }
+  return (
+    <Card theme={theme} style={{ padding: 16, marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+        Host view — everyone's roles
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {players.map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 4px" }}>
+            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{p}</span>
+            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, fontWeight: 700, color: roleColor[roles[i]] }}>{roles[i]}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+const CUSTOM_ROLE_PALETTE = ["#e5772d", "#00e5c7", "#f7c948", "#9d7cff", "#5cd68c", "#ff9fd6"];
+
+function MafiaGame({ theme, onExit, friends, groups }) {
+  const [phase, setPhase] = useState("setup");
+  const [players, setPlayers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [mafiaCount, setMafiaCount] = useState(1);
+  const [detectiveCount, setDetectiveCount] = useState(1);
+  const [customRoles, setCustomRoles] = useState([]);
+
+  const roleColor = { Mafia: "#ff6b6b", Detective: "#7c8cff", Civilian: theme.textDim };
+  customRoles.forEach((r, i) => { roleColor[r.name] = CUSTOM_ROLE_PALETTE[i % CUSTOM_ROLE_PALETTE.length]; });
+
+  const start = (playerList) => {
+    const specialTotal = mafiaCount + detectiveCount + customRoles.reduce((s, r) => s + r.count, 0);
+    const civilians = playerList.length - specialTotal;
+    let pool = [
+      ...Array(mafiaCount).fill("Mafia"),
+      ...Array(detectiveCount).fill("Detective"),
+      ...customRoles.flatMap((r) => Array(r.count).fill(r.name)),
+      ...Array(Math.max(civilians, 0)).fill("Civilian"),
+    ];
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    setPlayers(playerList); setRoles(pool); setPhase("reveal"); setIdx(0);
+  };
+
+  if (phase === "setup") {
+    return (
+      <PlayerSetup
+        theme={theme} minPlayers={3} gameColor="#7c8cff" onStart={start} friends={friends} groups={groups} initialPlayers={players}
+        extraSettings={(count) => (
+          <MafiaSettings theme={theme} playerCount={count} mafia={mafiaCount} detective={detectiveCount} setMafia={setMafiaCount} setDetective={setDetectiveCount} customRoles={customRoles} setCustomRoles={setCustomRoles} />
+        )}
+      />
+    );
+  }
+
+  if (phase === "reveal") {
+    const isLast = idx === players.length - 1;
+    const flavor = { Mafia: "Blend in. Eliminate at night.", Detective: "Investigate one player each night.", Civilian: "Find the mafia before it's too late." };
+    return (
+      <div>
+        <ScreenHeader theme={theme} title={players[idx]} subtitle={`Player ${idx + 1} of ${players.length}`} onBack={() => setPhase("setup")} />
+        <RevealCard theme={theme} label={roles[idx]} sublabel={flavor[roles[idx]] || "A special role — ask the host how it works if you're not sure."} color={roleColor[roles[idx]]} isLast={isLast} isFirst={idx === 0} onNext={() => (isLast ? setPhase("done") : setIdx(idx + 1))} onPrev={() => setIdx(Math.max(0, idx - 1))} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: "center", padding: "20px 0" }}>
+      <Sparkles size={30} color="#7c8cff" style={{ marginBottom: 14 }} />
+      <h2 style={{ fontFamily: theme.font, color: theme.text, marginBottom: 8 }}>Roles are set</h2>
+      <p style={{ color: theme.textDim, fontFamily: "Inter, sans-serif", fontSize: 14, marginBottom: 20 }}>The host moderates the night and day phases out loud. Good luck.</p>
+      <HostRoleSummary theme={theme} players={players} roles={roles} roleColor={roleColor} />
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <Button theme={theme} onClick={() => setPhase("setup")} icon={RotateCcw} variant="secondary">Play again</Button>
+        <Button theme={theme} onClick={onExit} icon={Home}>Back to home</Button>
+      </div>
+    </div>
+  );
+}
+
+function MafiaSettings({ theme, playerCount, mafia, detective, setMafia, setDetective, customRoles, setCustomRoles }) {
+  const [newRoleName, setNewRoleName] = useState("");
+  const specialTotal = mafia + detective + customRoles.reduce((s, r) => s + r.count, 0);
+  const civilians = Math.max(playerCount - specialTotal, 0);
+  const maxMafia = Math.max(playerCount - detective - customRoles.reduce((s, r) => s + r.count, 0) - 1, 1);
+  useEffect(() => { if (mafia > maxMafia) setMafia(maxMafia); }, [playerCount, customRoles.length]);
+
+  const addRole = () => {
+    const n = newRoleName.trim();
+    if (!n) return;
+    setCustomRoles((rs) => [...rs, { id: genId(), name: n, count: 1 }]);
+    setNewRoleName("");
+  };
+  const updateRoleCount = (id, delta) => {
+    setCustomRoles((rs) => rs.map((r) => (r.id === id ? { ...r, count: Math.max(1, r.count + delta) } : r)));
+  };
+  const removeRole = (id) => setCustomRoles((rs) => rs.filter((r) => r.id !== id));
+
+  return (
+    <Card theme={theme} style={{ padding: 16, marginBottom: 18 }}>
+      <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Role ratio</div>
+      <RatioRow theme={theme} label="Mafia" value={mafia} onChange={(v) => setMafia(Math.max(1, Math.min(v, maxMafia)))} color="#ff6b6b" />
+      <RatioRow theme={theme} label="Detective" value={detective} onChange={(v) => setDetective(Math.max(0, Math.min(v, 1)))} color="#7c8cff" locked />
+
+      {customRoles.map((r, i) => (
+        <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px" }}>
+          <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{r.name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => updateRoleCount(r.id, -1)} style={stepperBtn(theme, false)}><Minus size={13} /></button>
+            <span style={{ width: 18, textAlign: "center", fontWeight: 700, color: CUSTOM_ROLE_PALETTE[i % CUSTOM_ROLE_PALETTE.length], fontFamily: "Inter, sans-serif" }}>{r.count}</span>
+            <button onClick={() => updateRoleCount(r.id, 1)} style={stepperBtn(theme, false)}><Plus size={13} /></button>
+            <X size={15} color={theme.textDim} style={{ cursor: "pointer", marginLeft: 2 }} onClick={() => removeRole(r.id)} />
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 4px 0", fontFamily: "Inter, sans-serif", fontSize: 13.5, color: theme.textDim }}>
+        <span>Civilians</span><span style={{ color: theme.text, fontWeight: 600 }}>{civilians}</span>
+      </div>
+      {civilians < 1 && <p style={{ color: "#ff6b6b", fontSize: 12, marginTop: 8, fontFamily: "Inter, sans-serif" }}>Add more players or lower the special role count.</p>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${theme.border}` }}>
+        <input
+          value={newRoleName}
+          onChange={(e) => setNewRoleName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && addRole()}
+          placeholder="e.g. Doctor, Jester"
+          style={{ flex: 1, background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "9px 12px", color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 13.5, outline: "none" }}
+        />
+        <Button theme={theme} onClick={addRole} variant="secondary" icon={Plus} style={{ padding: "0 14px", fontSize: 13 }}>Add role</Button>
+      </div>
+    </Card>
+  );
+}
+
+function WerewolfGame({ theme, onExit, friends, groups }) {
+  const [phase, setPhase] = useState("setup");
+  const [players, setPlayers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [wolfCount, setWolfCount] = useState(1);
+  const [seerCount, setSeerCount] = useState(1);
+
+  const start = (playerList) => {
+    const villagers = playerList.length - wolfCount - seerCount;
+    let pool = [...Array(wolfCount).fill("Werewolf"), ...Array(seerCount).fill("Seer"), ...Array(Math.max(villagers, 0)).fill("Villager")];
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    setPlayers(playerList); setRoles(pool); setPhase("reveal"); setIdx(0);
+  };
+
+  if (phase === "setup") {
+    const maxWolves = Math.max(players.length - seerCount - 1, 1);
+    return (
+      <PlayerSetup
+        theme={theme} minPlayers={3} gameColor="#9d7cff" onStart={start} friends={friends} groups={groups} initialPlayers={players}
+        extraSettings={(count) => {
+          const civilians = Math.max(count - wolfCount - seerCount, 0);
+          return (
+            <Card theme={theme} style={{ padding: 16, marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Role ratio</div>
+              <RatioRow theme={theme} label="Werewolves" value={wolfCount} onChange={(v) => setWolfCount(Math.max(1, Math.min(v, Math.max(count - seerCount - 1, 1))))} color="#9d7cff" />
+              <RatioRow theme={theme} label="Seer" value={seerCount} onChange={(v) => setSeerCount(Math.max(0, Math.min(v, 1)))} color="#00e5c7" locked />
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 4px 0", fontFamily: "Inter, sans-serif", fontSize: 13.5, color: theme.textDim }}>
+                <span>Villagers</span><span style={{ color: theme.text, fontWeight: 600 }}>{civilians}</span>
+              </div>
+            </Card>
+          );
+        }}
+      />
+    );
+  }
+
+  const wRoleColor = { Werewolf: "#9d7cff", Seer: "#00e5c7", Villager: theme.textDim };
+
+  if (phase === "reveal") {
+    const isLast = idx === players.length - 1;
+    return (
+      <div>
+        <ScreenHeader theme={theme} title={players[idx]} subtitle={`Player ${idx + 1} of ${players.length}`} onBack={() => setPhase("setup")} />
+        <RevealCard theme={theme} label={roles[idx]} sublabel={roles[idx] === "Werewolf" ? "Hunt at night. Blend in by day." : roles[idx] === "Seer" ? "Peek at one player's true role each night." : "Root out the werewolves before the village falls."} color={wRoleColor[roles[idx]]} isLast={isLast} isFirst={idx === 0} onNext={() => (isLast ? setPhase("done") : setIdx(idx + 1))} onPrev={() => setIdx(Math.max(0, idx - 1))} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: "center", padding: "20px 0" }}>
+      <Moon size={30} color="#9d7cff" style={{ marginBottom: 14 }} />
+      <h2 style={{ fontFamily: theme.font, color: theme.text, marginBottom: 8 }}>The moon rises</h2>
+      <p style={{ color: theme.textDim, fontFamily: "Inter, sans-serif", fontSize: 14, marginBottom: 20 }}>Host narrates night and day phases out loud, just like Mafia.</p>
+      <HostRoleSummary theme={theme} players={players} roles={roles} roleColor={wRoleColor} />
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <Button theme={theme} onClick={() => setPhase("setup")} icon={RotateCcw} variant="secondary">Play again</Button>
+        <Button theme={theme} onClick={onExit} icon={Home}>Back to home</Button>
+      </div>
+    </div>
+  );
+}
+
+function ImposterGame({ theme, onExit, friends, groups }) {
+  const [phase, setPhase] = useState("setup");
+  const [players, setPlayers] = useState([]);
+  const [category, setCategory] = useState("Animals");
+  const [imposterCount, setImposterCount] = useState(1);
+  const [assignments, setAssignments] = useState([]);
+  const [word, setWord] = useState("");
+  const [idx, setIdx] = useState(0);
+  const [starter, setStarter] = useState(null);
+
+  const start = (playerList) => {
+    const w = WORD_BANK[category][Math.floor(Math.random() * WORD_BANK[category].length)];
+    setWord(w);
+    let pool = [...Array(imposterCount).fill(true), ...Array(playerList.length - imposterCount).fill(false)];
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    setPlayers(playerList); setAssignments(pool); setStarter(Math.floor(Math.random() * playerList.length)); setPhase("reveal"); setIdx(0);
+  };
+
+  if (phase === "setup") {
+    return (
+      <div>
+        <Card theme={theme} style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Word category</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {Object.keys(WORD_BANK).map((c) => (
+              <button key={c} onClick={() => setCategory(c)} style={{ padding: "8px 14px", borderRadius: "999px", fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${category === c ? "#ff6b6b" : theme.border}`, background: category === c ? "#ff6b6b22" : theme.surfaceAlt, color: category === c ? "#ff6b6b" : theme.textDim, cursor: "pointer" }}>{c}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
+            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>Number of imposters</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button onClick={() => setImposterCount((v) => Math.max(1, v - 1))} style={stepperBtn(theme, false)}><Minus size={13} /></button>
+              <span style={{ width: 18, textAlign: "center", fontWeight: 700, color: "#ff6b6b", fontFamily: "Inter, sans-serif" }}>{imposterCount}</span>
+              <button onClick={() => setImposterCount((v) => Math.min(v + 1, 4))} style={stepperBtn(theme, false)}><Plus size={13} /></button>
+            </div>
+          </div>
+        </Card>
+        <PlayerSetup theme={theme} minPlayers={3} gameColor="#ff6b6b" onStart={start} friends={friends} groups={groups} />
+      </div>
+    );
+  }
+
+  if (phase === "reveal") {
+    const isLast = idx === players.length - 1;
+    const amImposter = assignments[idx];
+    return (
+      <div>
+        <ScreenHeader theme={theme} title={players[idx]} subtitle={`Player ${idx + 1} of ${players.length}`} onBack={() => setPhase("setup")} />
+        <RevealCard theme={theme} label={amImposter ? "IMPOSTER" : word} sublabel={amImposter ? "You don't know the word. Blend in." : category} color={amImposter ? "#ff6b6b" : "#00e5c7"} isLast={isLast} isFirst={idx === 0} onNext={() => (isLast ? setPhase("start") : setIdx(idx + 1))} onPrev={() => setIdx(Math.max(0, idx - 1))} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: "center", padding: "40px 0" }}>
+      <Flame size={30} color="#ff6b6b" style={{ marginBottom: 14 }} />
+      <h2 style={{ fontFamily: theme.font, color: theme.text, marginBottom: 8 }}>{players[starter]} starts the round</h2>
+      <p style={{ color: theme.textDim, fontFamily: "Inter, sans-serif", fontSize: 14, marginBottom: 24 }}>Go around describing the word without saying it. Vote out who you think is lying.</p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <Button theme={theme} onClick={() => setPhase("setup")} icon={RotateCcw} variant="secondary">Play again</Button>
+        <Button theme={theme} onClick={onExit} icon={Home}>Back to home</Button>
+      </div>
+    </div>
+  );
+}
+
+function CharadesGame({ theme, onExit }) {
+  const [phase, setPhase] = useState("setup");
+  const [category, setCategory] = useState("Animals");
+  const [duration, setDuration] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [wordIdx, setWordIdx] = useState(0);
+  const [deck, setDeck] = useState([]);
+  const [correct, setCorrect] = useState(0);
+  const [skipped, setSkipped] = useState(0);
+  const timerRef = useRef(null);
+
+  const startRound = () => {
+    const shuffled = [...WORD_BANK[category]].sort(() => Math.random() - 0.5);
+    setDeck(shuffled); setWordIdx(0); setCorrect(0); setSkipped(0); setTimeLeft(duration); setPhase("play");
+  };
+
+  useEffect(() => {
+    if (phase !== "play") return;
+    if (timeLeft <= 0) { setPhase("results"); return; }
+    timerRef.current = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    return () => clearTimeout(timerRef.current);
+  }, [phase, timeLeft]);
+
+  const advance = (isCorrect) => { if (isCorrect) setCorrect((c) => c + 1); else setSkipped((s) => s + 1); setWordIdx((i) => (i + 1) % deck.length); };
+
+  if (phase === "setup") {
+    return (
+      <div>
+        <Card theme={theme} style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Category</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {CHARADES_CATEGORIES.map((c) => (
+              <button key={c} onClick={() => setCategory(c)} style={{ padding: "8px 14px", borderRadius: "999px", fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${category === c ? "#00e5c7" : theme.border}`, background: category === c ? "#00e5c722" : theme.surfaceAlt, color: category === c ? "#00e5c7" : theme.textDim, cursor: "pointer" }}>{c}</button>
+            ))}
+          </div>
+        </Card>
+        <Card theme={theme} style={{ padding: 16, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>Round length</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[30, 60, 90].map((d) => (
+                <button key={d} onClick={() => setDuration(d)} style={{ padding: "6px 12px", borderRadius: "8px", fontSize: 12.5, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${duration === d ? "#00e5c7" : theme.border}`, background: duration === d ? "#00e5c722" : theme.surfaceAlt, color: duration === d ? "#00e5c7" : theme.textDim, cursor: "pointer" }}>{d}s</button>
+              ))}
+            </div>
+          </div>
+        </Card>
+        <p style={{ color: theme.textDim, fontSize: 13, fontFamily: "Inter, sans-serif", marginBottom: 20, lineHeight: 1.6 }}>
+          Hold the phone up to your forehead (or have a friend hold it facing you). They act out or describe the word on screen without saying it — you guess. Tap <b style={{ color: theme.text }}>Got it</b> or <b style={{ color: theme.text }}>Skip</b> to move on.
+        </p>
+        <Button theme={theme} onClick={startRound} icon={Play} style={{ width: "100%", padding: "15px", background: "#00e5c7", color: "#0a0e14" }}>Start round</Button>
+        <div style={{ marginTop: 10 }}><Button theme={theme} onClick={onExit} variant="ghost" style={{ width: "100%" }}>Cancel</Button></div>
+      </div>
+    );
+  }
+
+  if (phase === "play") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18, color: timeLeft <= 10 ? "#ff3d6e" : theme.textDim, fontFamily: "Inter, sans-serif", fontWeight: 700 }}><Timer size={16} /> {timeLeft}s</div>
+        <div style={{ width: "100%", maxWidth: 340, aspectRatio: "4/3", borderRadius: theme.radius, background: `linear-gradient(160deg, #00e5c722, ${theme.surface})`, border: "1px solid #00e5c755", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 22, padding: 20 }}>
+          <div style={{ fontFamily: theme.font, fontSize: 34, fontWeight: 700, color: theme.text, textAlign: "center" }}>{deck[wordIdx]}</div>
+        </div>
+        <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 340 }}>
+          <Button theme={theme} onClick={() => advance(false)} style={{ flex: 1, padding: "16px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` }}>Skip</Button>
+          <Button theme={theme} onClick={() => advance(true)} icon={Check} style={{ flex: 1, padding: "16px", background: "#00e5c7", color: "#0a0e14" }}>Got it</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: "center", padding: "30px 0" }}>
+      <Sparkles size={30} color="#00e5c7" style={{ marginBottom: 14 }} />
+      <h2 style={{ fontFamily: theme.font, color: theme.text, marginBottom: 4, fontSize: 30 }}>{correct}</h2>
+      <p style={{ color: theme.textDim, fontFamily: "Inter, sans-serif", fontSize: 13.5, marginBottom: 24 }}>correct · {skipped} skipped</p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+        <Button theme={theme} onClick={startRound} icon={RotateCcw} variant="secondary">Play again</Button>
+        <Button theme={theme} onClick={onExit} icon={Home}>Home</Button>
+      </div>
+    </div>
+  );
+}
+
+function SpinWheel({ theme, players, gameColor, stage, rotation, onSpin }) {
+  const n = players.length;
+  const segAngle = 360 / n;
+  const colors = players.map((_, i) => (i % 2 === 0 ? gameColor : theme.surfaceAlt));
+  const gradient = `conic-gradient(${colors.map((c, i) => `${c} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ")})`;
+  const spinning = stage !== "idle";
+
+  const transition =
+    stage === "spin" ? "transform 6.5s cubic-bezier(0.1, 0.85, 0.15, 1)" :
+    stage === "settle" ? "transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1)" :
+    "none";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0" }}>
+      <div style={{ position: "relative", width: 240, height: 240, marginBottom: 22 }}>
+        <div style={{ position: "absolute", top: -6, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "9px solid transparent", borderRight: "9px solid transparent", borderTop: `16px solid ${theme.text}`, zIndex: 2 }} />
+        <div
+          style={{
+            width: 240, height: 240, borderRadius: "50%", background: gradient,
+            border: `3px solid ${theme.border}`, position: "relative",
+            transform: `rotate(${rotation}deg)`,
+            transition,
+          }}
+        >
+          {players.map((p, i) => {
+            const angle = i * segAngle + segAngle / 2;
+            return (
+              <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0, transform: `rotate(${angle}deg)` }}>
+                <span style={{ position: "absolute", left: -40, top: -100, width: 80, textAlign: "center", fontFamily: "Inter, sans-serif", fontSize: 11.5, fontWeight: 700, color: i % 2 === 0 ? (theme.name === "Classroom" ? "#fffdf8" : "#0a0a0a") : theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {p}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ position: "absolute", top: "50%", left: "50%", width: 42, height: 42, marginTop: -21, marginLeft: -21, borderRadius: "50%", background: theme.surface, border: `2px solid ${theme.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Shuffle size={16} color={theme.textDim} />
+        </div>
+      </div>
+      <Button theme={theme} onClick={onSpin} disabled={spinning} icon={RotateCcw} style={{ background: gameColor, color: "#1c1310" }}>
+        {stage === "spin" ? "Spinning..." : stage === "settle" ? "Almost there..." : "Spin the wheel"}
+      </Button>
+    </div>
+  );
+}
+
+function TruthDareGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [phase, setPhase] = useState("wheel");
+  const [rotation, setRotation] = useState(0);
+  const [spinStage, setSpinStage] = useState("idle");
+  const [current, setCurrent] = useState(null);
+  const [choice, setChoice] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [used, setUsed] = useState({ truth: [], dare: [] });
+  const [round, setRound] = useState(0);
+  const spinTimeoutRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spin = () => {
+    if (spinStage !== "idle" || !players) return;
+    const idx = Math.floor(Math.random() * players.length);
+    const segAngle = 360 / players.length;
+    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    const additional = ((targetMod - currentMod) + 360) % 360;
+    const overshoot = 6;
+    setCurrent(players[idx]);
+    setSpinStage("spin");
+    setRotation(rotation + 360 * 5 + additional + overshoot);
+    clearTimeout(spinTimeoutRef.current);
+    spinTimeoutRef.current = setTimeout(() => {
+      setSpinStage("settle");
+      setRotation((r) => r - overshoot);
+      spinTimeoutRef.current = setTimeout(() => {
+        setSpinStage("idle");
+        setPhase("chosen");
+      }, 550);
+    }, 6500);
+  };
+
+  const pick = (type) => {
+    const bank = type === "truth" ? TRUTHS : DARES;
+    const usedList = used[type];
+    let availableIdx = bank.map((_, i) => i).filter((i) => !usedList.includes(i));
+    if (availableIdx.length === 0) availableIdx = bank.map((_, i) => i);
+    const i = availableIdx[Math.floor(Math.random() * availableIdx.length)];
+    setUsed((u) => ({ ...u, [type]: [...u[type], i] }));
+    setPrompt(bank[i]); setChoice(type);
+  };
+
+  const nextTurn = () => { setChoice(null); setPrompt(""); setRound((r) => r + 1); setPhase("wheel"); };
+
+  if (!players) {
+    return (
+      <PlayerSetup theme={theme} minPlayers={2} gameColor="#e5772d" friends={friends} groups={groups} initialPlayers={lastPlayers}
+        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Truth & Dare" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      {phase !== "chosen" ? (
+        <SpinWheel theme={theme} players={players} gameColor="#e5772d" stage={spinStage} rotation={rotation} onSpin={spin} />
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>The wheel picked</div>
+            <div style={{ fontFamily: theme.font, fontSize: 32, fontWeight: 700, color: "#e5772d" }}>{current}</div>
+          </div>
+          {!choice ? (
+            <div style={{ display: "flex", gap: 12 }}>
+              <Button theme={theme} onClick={() => pick("truth")} style={{ flex: 1, padding: "20px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` }}>Truth</Button>
+              <Button theme={theme} onClick={() => pick("dare")} style={{ flex: 1, padding: "20px", background: "#e5772d", color: "#1c1310" }}>Dare</Button>
+            </div>
+          ) : (
+            <Card theme={theme} style={{ padding: 24, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: choice === "dare" ? "#e5772d" : theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, fontWeight: 700 }}>{choice}</div>
+              <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
+            </Card>
+          )}
+          {choice && <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", marginTop: 20, background: "#e5772d", color: "#1c1310" }}>Spin for next player</Button>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function NeverHaveIEverGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [phase, setPhase] = useState("wheel");
+  const [rotation, setRotation] = useState(0);
+  const [spinStage, setSpinStage] = useState("idle");
+  const [current, setCurrent] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [used, setUsed] = useState([]);
+  const [round, setRound] = useState(0);
+  const spinTimeoutRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spin = () => {
+    if (spinStage !== "idle" || !players) return;
+    const idx = Math.floor(Math.random() * players.length);
+    const segAngle = 360 / players.length;
+    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    const additional = ((targetMod - currentMod) + 360) % 360;
+    const overshoot = 6;
+    setCurrent(players[idx]);
+
+    let available = NEVER_HAVE_I_EVER.map((_, i) => i).filter((i) => !used.includes(i));
+    if (available.length === 0) available = NEVER_HAVE_I_EVER.map((_, i) => i);
+    const pIdx = available[Math.floor(Math.random() * available.length)];
+    setUsed((u) => [...u, pIdx]);
+    setPrompt(NEVER_HAVE_I_EVER[pIdx]);
+
+    setSpinStage("spin");
+    setRotation(rotation + 360 * 5 + additional + overshoot);
+    clearTimeout(spinTimeoutRef.current);
+    spinTimeoutRef.current = setTimeout(() => {
+      setSpinStage("settle");
+      setRotation((r) => r - overshoot);
+      spinTimeoutRef.current = setTimeout(() => {
+        setSpinStage("idle");
+        setPhase("chosen");
+      }, 550);
+    }, 6500);
+  };
+
+  const nextTurn = () => { setRound((r) => r + 1); setPhase("wheel"); };
+
+  if (!players) {
+    return (
+      <PlayerSetup theme={theme} minPlayers={2} gameColor="#f7c948" friends={friends} groups={groups} initialPlayers={lastPlayers}
+        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Never Have I Ever" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      {phase !== "chosen" ? (
+        <SpinWheel theme={theme} players={players} gameColor="#f7c948" stage={spinStage} rotation={rotation} onSpin={spin} />
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{current} reads it out</div>
+          </div>
+          <Card theme={theme} style={{ padding: 24, textAlign: "center", marginBottom: 20 }}>
+            <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
+          </Card>
+          <p style={{ fontSize: 12.5, color: theme.textDim, fontFamily: "Inter, sans-serif", textAlign: "center", marginBottom: 18 }}>Anyone who HAS done it puts a finger down (or takes a sip).</p>
+          <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", background: "#f7c948", color: "#1c1310" }}>Spin for next round</Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function WouldYouRatherGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [order, setOrder] = useState([]);
+  const [round, setRound] = useState(0);
+  const [prompt, setPrompt] = useState("");
+  const [usedIdx, setUsedIdx] = useState([]);
+
+  const nextPrompt = () => {
+    let available = WOULD_YOU_RATHER.map((_, i) => i).filter((i) => !usedIdx.includes(i));
+    if (available.length === 0) available = WOULD_YOU_RATHER.map((_, i) => i);
+    const i = available[Math.floor(Math.random() * available.length)];
+    setUsedIdx((u) => [...u, i]);
+    setPrompt(WOULD_YOU_RATHER[i]);
+    setRound((r) => r + 1);
+  };
+
+  if (!players) {
+    return <PlayerSetup theme={theme} minPlayers={2} gameColor="#e5772d" friends={friends} groups={groups} initialPlayers={lastPlayers}
+      onStart={(list) => { setPlayers(list); setOrder(list); nextPrompt(); }} />;
+  }
+
+  const answerer = order[(round - 1) % order.length];
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Would You Rather" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      <Card theme={theme} style={{ padding: 24, textAlign: "center", marginBottom: 18 }}>
+        <div style={{ fontSize: 11, color: "#e5772d", fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, fontWeight: 700 }}>{answerer} answers first</div>
+        <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
+      </Card>
+      <p style={{ color: theme.textDim, fontSize: 13, fontFamily: "Inter, sans-serif", marginBottom: 18, textAlign: "center" }}>Everyone else answers too, then debate who's right.</p>
+      <Button theme={theme} onClick={nextPrompt} icon={Shuffle} style={{ width: "100%", background: "#e5772d", color: "#1c1310" }}>Next question</Button>
+    </div>
+  );
+}
+
+function StoryChainGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [lines, setLines] = useState([]);
+  const [turn, setTurn] = useState(0);
+  const [line, setLine] = useState("");
+  const [finished, setFinished] = useState(false);
+
+  if (!players) {
+    return <PlayerSetup theme={theme} minPlayers={2} gameColor="#ff6b6b" friends={friends} groups={groups} initialPlayers={lastPlayers}
+      onStart={(list) => setPlayers(list)} />;
+  }
+
+  const addLine = () => {
+    const l = line.trim();
+    if (!l) return;
+    setLines((arr) => [...arr, { player: players[turn % players.length], text: l }]);
+    setLine("");
+    setTurn((t) => t + 1);
+  };
+
+  if (finished) {
+    return (
+      <div>
+        <ScreenHeader theme={theme} title="Your story" onBack={() => { setLastPlayers(players); setPlayers(null); setLines([]); setTurn(0); setFinished(false); }} />
+        <Card theme={theme} style={{ padding: 20, marginBottom: 18 }}>
+          <p style={{ fontFamily: theme.font, fontSize: 16, color: theme.text, lineHeight: 1.8, margin: 0 }}>
+            {lines.map((l, i) => <span key={i}>{l.text} </span>)}
+          </p>
+        </Card>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button theme={theme} onClick={() => { setLastPlayers(players); setPlayers(null); setLines([]); setTurn(0); setFinished(false); }} icon={RotateCcw} variant="secondary" style={{ flex: 1 }}>Play again</Button>
+          <Button theme={theme} onClick={onExit} icon={Home} style={{ flex: 1 }}>Back to home</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Story Chain" subtitle={`${players[turn % players.length]}'s turn`} onBack={() => { setLastPlayers(players); setPlayers(null); setLines([]); setTurn(0); }} />
+      {lines.length > 0 && (
+        <Card theme={theme} style={{ padding: 16, marginBottom: 16, maxHeight: 160, overflowY: "auto" }}>
+          <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13.5, color: theme.textDim, lineHeight: 1.7, margin: 0 }}>
+            {lines.map((l, i) => <span key={i}>{l.text} </span>)}
+          </p>
+        </Card>
+      )}
+      <textarea
+        value={line}
+        onChange={(e) => setLine(e.target.value)}
+        placeholder={lines.length === 0 ? "Start the story with one sentence..." : "Add the next sentence..."}
+        rows={3}
+        style={{ width: "100%", background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "13px 16px", color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 14.5, outline: "none", resize: "none", marginBottom: 12, boxSizing: "border-box" }}
+      />
+      <div style={{ display: "flex", gap: 10 }}>
+        <Button theme={theme} onClick={addLine} disabled={!line.trim()} icon={Send} style={{ flex: 1, background: "#ff6b6b" }}>Add line</Button>
+        {lines.length >= players.length && <Button theme={theme} onClick={() => setFinished(true)} variant="secondary">Finish story</Button>}
+      </div>
+    </div>
+  );
+}
+
+function CodenamesGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [teams, setTeams] = useState({ a: [], b: [] });
+  const [board, setBoard] = useState([]);
+  const [revealed, setRevealed] = useState([]);
+  const [spyView, setSpyView] = useState(false);
+  const [turn, setTurn] = useState("a");
+
+  const buildBoard = (list) => {
+    const words = [...CODENAMES_WORDS].sort(() => Math.random() - 0.5).slice(0, 20);
+    let colors = [...Array(8).fill("a"), ...Array(8).fill("b"), ...Array(3).fill("neutral"), "assassin"];
+    colors = colors.sort(() => Math.random() - 0.5);
+    setBoard(words.map((w, i) => ({ word: w, color: colors[i] })));
+    setRevealed(Array(20).fill(false));
+    const half = Math.ceil(list.length / 2);
+    setTeams({ a: list.slice(0, half), b: list.slice(half) });
+  };
+
+  if (!players) {
+    return <PlayerSetup theme={theme} minPlayers={4} gameColor="#00e5c7" friends={friends} groups={groups} initialPlayers={lastPlayers}
+      onStart={(list) => { setPlayers(list); buildBoard(list); }} />;
+  }
+
+  const tapTile = (i) => {
+    if (revealed[i] || spyView) return;
+    const next = [...revealed]; next[i] = true; setRevealed(next);
+    const tile = board[i];
+    if (tile.color === "assassin") return;
+    if (tile.color !== turn && tile.color !== "neutral") setTurn(turn === "a" ? "b" : "a");
+  };
+
+  const aLeft = board.filter((t, i) => t.color === "a" && !revealed[i]).length;
+  const bLeft = board.filter((t, i) => t.color === "b" && !revealed[i]).length;
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Codenames Party" subtitle={`Team ${turn.toUpperCase()}'s turn`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+        <Card theme={theme} style={{ flex: 1, padding: 10, textAlign: "center", border: `1px solid ${turn === "a" ? "#00e5c7" : theme.border}` }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif" }}>Team A</div>
+          <div style={{ fontFamily: theme.font, fontSize: 18, fontWeight: 700, color: "#00e5c7" }}>{aLeft} left</div>
+        </Card>
+        <Card theme={theme} style={{ flex: 1, padding: 10, textAlign: "center", border: `1px solid ${turn === "b" ? "#ff3d6e" : theme.border}` }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif" }}>Team B</div>
+          <div style={{ fontFamily: theme.font, fontSize: 18, fontWeight: 700, color: "#ff3d6e" }}>{bLeft} left</div>
+        </Card>
+      </div>
+
+      <Button theme={theme} onClick={() => setSpyView((v) => !v)} variant="secondary" icon={spyView ? EyeOff : Eye} style={{ width: "100%", marginBottom: 14 }}>
+        {spyView ? "Hide spymaster view" : "Spymaster: press to see colors"}
+      </Button>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 7 }}>
+        {board.map((tile, i) => {
+          const colorMap = { a: "#00e5c7", b: "#ff3d6e", neutral: theme.textDim, assassin: "#000" };
+          const show = revealed[i] || spyView;
+          return (
+            <div
+              key={i}
+              onClick={() => tapTile(i)}
+              style={{
+                aspectRatio: "1.3/1", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 4, textAlign: "center", cursor: revealed[i] ? "default" : "pointer", fontSize: 10.5, fontFamily: "Inter, sans-serif", fontWeight: 600,
+                background: show ? colorMap[tile.color] + (revealed[i] ? "" : "33") : theme.surfaceAlt,
+                color: show ? (revealed[i] ? "#fff" : theme.text) : theme.text,
+                border: `1px solid ${show ? colorMap[tile.color] : theme.border}`,
+                opacity: revealed[i] && !spyView ? 0.55 : 1,
+              }}
+            >
+              {tile.word}
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11.5, color: theme.textDim, fontFamily: "Inter, sans-serif", marginTop: 14, lineHeight: 1.6, textAlign: "center" }}>
+        Spymasters take turns giving a one-word clue and a number out loud. Their team taps words to guess. Tapping the black tile ends the game instantly.
+      </p>
+    </div>
+  );
+}
+
+function GameCard({ theme, g, onClick }) {
+  const Icon = g.icon;
+  return (
+    <Card
+      theme={theme}
+      onClick={onClick}
+      style={{ cursor: "pointer", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 154 }}
+    >
+      <div
+        style={{
+          position: "relative", height: 82, background: `linear-gradient(135deg, ${g.color}33 0%, ${g.color}0d 70%)`,
+          borderBottom: `1px solid ${theme.border}`, overflow: "hidden",
+        }}
+      >
+        <Icon size={78} color={g.color} strokeWidth={1.3} style={{ position: "absolute", right: -14, top: -14, opacity: 0.5, transform: "rotate(-12deg)" }} />
+        <div style={{ position: "absolute", left: 14, bottom: 12, width: 38, height: 38, borderRadius: "10px", background: g.color + "2e", border: `1px solid ${g.color}55`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon size={19} color={g.color} />
+        </div>
+      </div>
+      <div style={{ padding: "12px 14px 14px" }}>
+        <div style={{ fontFamily: theme.font, fontSize: 16.5, fontWeight: 700, color: theme.text }}>{g.name}</div>
+        <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11.5, color: theme.textDim, marginTop: 2 }}>{g.tagline}</div>
+      </div>
+    </Card>
+  );
+}
+
+function HomeScreen({ theme, onSelectGame, ownedGames }) {
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const extraGames = EXPLORE_GAMES.filter((g) => ownedGames.includes(g.id));
+  const allGames = [...CORE_GAMES, ...extraGames];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 26 }}>
+        <div style={{ fontFamily: theme.font, fontSize: 13, fontWeight: 700, color: theme.accent, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>
+          GameBox
+        </div>
+        <div style={{ fontSize: 12, color: theme.textDim, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
+          {new Date().toLocaleDateString(undefined, { weekday: "long" })}
+        </div>
+        <h1 style={{ fontFamily: theme.font, fontSize: 30, fontWeight: 700, color: theme.text, margin: 0 }}>Ready to play?</h1>
+      </div>
+
+      {!joining ? (
+        <div style={{ display: "flex", gap: 10, marginBottom: 26 }}>
+          <Button theme={theme} onClick={() => setJoining(true)} variant="secondary" style={{ flex: 1, padding: "15px" }} icon={Lock}>Join a party</Button>
+          <Button theme={theme} onClick={() => setJoining(false)} style={{ flex: 1, padding: "15px" }} icon={Plus}>Create a party</Button>
+        </div>
+      ) : (
+        <Card theme={theme} style={{ padding: 16, marginBottom: 26 }}>
+          <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Enter party code</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="e.g. 7QXNP" maxLength={5}
+              style={{ flex: 1, background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "12px 14px", color: theme.text, fontFamily: theme.font, fontSize: 16, letterSpacing: "0.12em", outline: "none" }} />
+            <Button theme={theme} disabled={joinCode.length < 4}>Join</Button>
+          </div>
+          <p style={{ fontSize: 11.5, color: theme.textDim, fontFamily: "Inter, sans-serif", marginTop: 10, marginBottom: 0 }}>
+            Joining from another device needs the host's party to be live on a server — this preview plays best when everyone gathers around one device instead.
+          </p>
+        </Card>
+      )}
+
+      <div style={{ fontSize: 12, color: theme.textDim, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Featured games</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {allGames.map((g) => <GameCard key={g.id} theme={theme} g={g} onClick={() => onSelectGame(g.id)} />)}
+      </div>
+    </div>
+  );
+}
+
+function ExploreScreen({ theme, ownedGames, onGetGame }) {
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Explore" subtitle="New games from the community" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {EXPLORE_GAMES.map((g) => {
+          const isOwned = ownedGames.includes(g.id);
+          const Icon = g.icon;
+          return (
+            <Card key={g.id} theme={theme} style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", overflow: "hidden", position: "relative" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative", zIndex: 1 }}>
+                <div style={{ position: "relative", width: 46, height: 46, borderRadius: "12px", background: `linear-gradient(135deg, ${g.color}3a, ${g.color}12)`, border: `1px solid ${g.color}44`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                  <Icon size={40} color={g.color} strokeWidth={1.3} style={{ position: "absolute", right: -8, bottom: -8, opacity: 0.35 }} />
+                  <Icon size={19} color={g.color} style={{ position: "relative" }} />
+                </div>
+                <div>
+                  <div style={{ fontFamily: theme.font, fontSize: 15.5, fontWeight: 700, color: theme.text }}>{g.name}</div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: theme.textDim, marginTop: 2, maxWidth: 190 }}>{g.desc}</div>
+                </div>
+              </div>
+              <Button
+                theme={theme}
+                onClick={() => onGetGame(g.id)}
+                disabled={isOwned}
+                variant={isOwned ? "ghost" : g.price === "Free" ? "secondary" : "primary"}
+                icon={isOwned ? Check : undefined}
+                style={{ padding: "8px 14px", fontSize: 12.5, flexShrink: 0 }}
+              >
+                {isOwned ? "Added" : g.price === "Free" ? "Get" : g.price}
+              </Button>
+            </Card>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11.5, color: theme.textDim, fontFamily: "Inter, sans-serif", marginTop: 16, lineHeight: 1.6 }}>
+        Once you get a game, it shows up on your homepage and is ready to play right away.
+      </p>
+    </div>
+  );
+}
+
+function FriendsScreen({ theme, friends, setFriends, groups, setGroups }) {
+  const [handle, setHandle] = useState("");
+  const [newGroup, setNewGroup] = useState("");
+  const [addingGroupFor, setAddingGroupFor] = useState(null);
+
+  const addFriend = () => {
+    const n = handle.trim();
+    if (!n) return;
+    setFriends((f) => [...f, { id: genId(), name: n, groups: [] }]);
+    setHandle("");
+  };
+
+  const toggleGroup = (friendId, groupName) => {
+    setFriends((fs) => fs.map((f) => {
+      if (f.id !== friendId) return f;
+      const has = f.groups.includes(groupName);
+      return { ...f, groups: has ? f.groups.filter((g) => g !== groupName) : [...f.groups, groupName] };
+    }));
+  };
+
+  const addCustomGroup = () => {
+    const g = newGroup.trim();
+    if (!g || groups.includes(g)) return;
+    setGroups((gs) => [...gs, g]);
+    setNewGroup("");
+  };
+
+  const removeFriend = (friendId) => {
+    setFriends((fs) => fs.filter((f) => f.id !== friendId));
+    if (addingGroupFor === friendId) setAddingGroupFor(null);
+  };
+
+  const removeGroup = (groupName) => {
+    setGroups((gs) => gs.filter((g) => g !== groupName));
+    setFriends((fs) => fs.map((f) => ({ ...f, groups: f.groups.filter((g) => g !== groupName) })));
+  };
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Friends" subtitle={`${friends.length} connected · invite by ID for any game`} />
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <input value={handle} onChange={(e) => setHandle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addFriend()} placeholder="Add by username or ID"
+          style={{ flex: 1, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "13px 16px", color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 14.5, outline: "none" }} />
+        <Button theme={theme} icon={UserPlus} onClick={addFriend}>Add</Button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+        {friends.map((f) => (
+          <Card key={f.id} theme={theme} style={{ padding: "13px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: theme.accent + "33", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: theme.font, fontSize: 13, fontWeight: 700, color: theme.accent }}>
+                  {f.name[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 14.5, color: theme.text }}>{f.name}</div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10.5, color: theme.textDim }}>#{f.id}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#5cd68c" }} />
+                <button onClick={() => setAddingGroupFor(addingGroupFor === f.id ? null : f.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.textDim, display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontFamily: "Inter, sans-serif" }}>
+                  Groups <ChevronDown size={13} style={{ transform: addingGroupFor === f.id ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+                </button>
+                <Trash2 size={15} color={theme.textDim} style={{ cursor: "pointer" }} onClick={() => removeFriend(f.id)} />
+              </div>
+            </div>
+            {f.groups.length > 0 && addingGroupFor !== f.id && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8, paddingLeft: 44 }}>
+                {f.groups.map((g) => (
+                  <span key={g} style={{ fontSize: 10.5, fontFamily: "Inter, sans-serif", color: theme.accent, background: theme.accent + "1a", padding: "2px 8px", borderRadius: "999px" }}>{g}</span>
+                ))}
+              </div>
+            )}
+            {addingGroupFor === f.id && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.border}` }}>
+                {groups.map((g) => {
+                  const active = f.groups.includes(g);
+                  return (
+                    <button key={g} onClick={() => toggleGroup(f.id, g)} style={{ padding: "6px 12px", borderRadius: "999px", fontSize: 12, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${active ? theme.accent : theme.border}`, background: active ? theme.accent + "22" : theme.surfaceAlt, color: active ? theme.accent : theme.textDim, cursor: "pointer" }}>
+                      {active && "✓ "}{g}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 12, color: theme.textDim, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Groups</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        {groups.map((g) => (
+          <div key={g} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px 8px 13px", borderRadius: "999px", fontSize: 12.5, fontFamily: "Inter, sans-serif", fontWeight: 600, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.text }}>
+            {g} · {friends.filter((f) => f.groups.includes(g)).length}
+            <Trash2 size={13} color={theme.textDim} style={{ cursor: "pointer" }} onClick={() => removeGroup(g)} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={newGroup} onChange={(e) => setNewGroup(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCustomGroup()} placeholder="New group name"
+          style={{ flex: 1, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, padding: "10px 14px", color: theme.text, fontFamily: "Inter, sans-serif", fontSize: 13.5, outline: "none" }} />
+        <Button theme={theme} variant="secondary" icon={FolderPlus} onClick={addCustomGroup} style={{ padding: "10px 14px" }}>Create</Button>
+      </div>
+      <p style={{ fontSize: 11.5, color: theme.textDim, fontFamily: "Inter, sans-serif", marginTop: 14, lineHeight: 1.6 }}>
+        When you set up any game, you'll see these groups as one-tap "quick add" buttons that drop everyone in — adjust who's actually playing from there before you start.
+      </p>
+    </div>
+  );
+}
+
+function SettingsScreen({ theme, themeKey, setThemeKey }) {
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Settings" />
+      <Card theme={theme} style={{ padding: 18, marginBottom: 18, display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", background: theme.accent + "33", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <User size={22} color={theme.accent} />
+        </div>
+        <div>
+          <div style={{ fontFamily: theme.font, fontSize: 16, fontWeight: 700, color: theme.text }}>Amna</div>
+          <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: theme.textDim }}>Signed in</div>
+        </div>
+      </Card>
+
+      <div style={{ fontSize: 12, color: theme.textDim, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Theme</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
+        {Object.entries(THEMES).map(([key, t]) => (
+          <Card key={key} theme={theme} onClick={() => setThemeKey(key)} style={{ padding: 14, cursor: "pointer", border: `1.5px solid ${themeKey === key ? t.accent : theme.border}`, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", gap: 5 }}>
+              <div style={{ width: 16, height: 16, borderRadius: "50%", background: t.bg, border: `1px solid ${t.border}` }} />
+              <div style={{ width: 16, height: 16, borderRadius: "50%", background: t.accent }} />
+              <div style={{ width: 16, height: 16, borderRadius: "50%", background: t.accent2 }} />
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, fontWeight: 600, color: theme.text }}>{t.name}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Button theme={theme} variant="danger" icon={LogOut} style={{ width: "100%" }}>Log out</Button>
+    </div>
+  );
+}
+
+function GameScreen({ theme, gameId, onExit, friends, groups }) {
+  const meta = CORE_GAMES.find((g) => g.id === gameId) || EXPLORE_GAMES.find((g) => g.id === gameId);
+  const [showHowTo, setShowHowTo] = useState(false);
+  return (
+    <div>
+      <ScreenHeader theme={theme} title={meta.name} subtitle={meta.tagline} onBack={onExit} onInfo={() => setShowHowTo(true)} />
+      {showHowTo && <HowToPlayModal theme={theme} gameId={gameId} onClose={() => setShowHowTo(false)} />}
+      {gameId === "mafia" && <MafiaGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "imposter" && <ImposterGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "charades" && <CharadesGame theme={theme} onExit={onExit} />}
+      {gameId === "truthdare" && <TruthDareGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "werewolf" && <WerewolfGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "wyr" && <WouldYouRatherGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "storychain" && <StoryChainGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "codenames" && <CodenamesGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+      {gameId === "nhie" && <NeverHaveIEverGame theme={theme} onExit={onExit} friends={friends} groups={groups} />}
+    </div>
+  );
+}
+
+function NavBar({ theme, tab, setTab }) {
+  const items = [
+    { id: "home", label: "Home", icon: Home },
+    { id: "explore", label: "Explore", icon: Compass },
+    { id: "friends", label: "Friends", icon: Users },
+    { id: "settings", label: "Settings", icon: Settings },
+  ];
+  const isDark = theme.name !== "Classroom";
+  return (
+    <div
+      style={{
+        position: "fixed", left: "50%", bottom: "calc(16px + env(safe-area-inset-bottom))",
+        transform: "translateX(-50%)", width: "calc(100% - 32px)", maxWidth: 398,
+        display: "flex", gap: 4, padding: "8px 6px", borderRadius: 20,
+        background: isDark ? "rgba(30,30,34,0.62)" : "rgba(255,253,248,0.72)",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)"}`,
+        boxShadow: "0 10px 30px -10px rgba(0,0,0,0.4)",
+        backdropFilter: "blur(18px) saturate(160%)", WebkitBackdropFilter: "blur(18px) saturate(160%)",
+        zIndex: 40,
+      }}
+    >
+      {items.map((it) => {
+        const Icon = it.icon;
+        const active = tab === it.id;
+        return (
+          <button key={it.id} onClick={() => setTab(it.id)} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
+            <Icon size={19} color={active ? theme.accent : theme.textDim} strokeWidth={active ? 2.4 : 2} />
+            <span style={{ fontSize: 10.5, fontFamily: "Inter, sans-serif", fontWeight: active ? 700 : 500, color: active ? theme.accent : theme.textDim }}>{it.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const STORAGE_KEY = "partyAppState";
+
+async function loadSavedState() {
+  try {
+    if (typeof window !== "undefined" && window.storage) {
+      const result = await window.storage.get(STORAGE_KEY);
+      return result ? JSON.parse(result.value) : null;
+    }
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v ? JSON.parse(v) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveState(state) {
+  const json = JSON.stringify(state);
+  try {
+    if (typeof window !== "undefined" && window.storage) {
+      await window.storage.set(STORAGE_KEY, json);
+    } else {
+      localStorage.setItem(STORAGE_KEY, json);
+    }
+  } catch (e) {
+  }
+}
+
+export default function App() {
+  useFonts();
+  const [hydrated, setHydrated] = useState(false);
+  const [themeKey, setThemeKey] = useState("dark");
+  const [tab, setTab] = useState("home");
+  const [activeGame, setActiveGame] = useState(null);
+  const [ownedGames, setOwnedGames] = useState([]);
+  const [friends, setFriends] = useState([
+    { id: genId(), name: "Mira", groups: ["Friends"] },
+    { id: genId(), name: "Deacon", groups: ["Friends"] },
+    { id: genId(), name: "Priya", groups: ["Cousins"] },
+  ]);
+  const [groups, setGroups] = useState(DEFAULT_GROUPS);
+  const theme = THEMES[themeKey];
+
+  useEffect(() => {
+    (async () => {
+      const saved = await loadSavedState();
+      if (saved) {
+        if (saved.themeKey) setThemeKey(saved.themeKey);
+        if (saved.friends) setFriends(saved.friends);
+        if (saved.groups) setGroups(saved.groups);
+        if (saved.ownedGames) setOwnedGames(saved.ownedGames);
+      }
+      setHydrated(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveState({ themeKey, friends, groups, ownedGames });
+  }, [hydrated, themeKey, friends, groups, ownedGames]);
+
+  return (
+    <div style={{ minHeight: "100vh", background: theme.bgGrad, display: "flex", justifyContent: "center", transition: "background .3s ease", fontFamily: "Inter, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 430, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+        <div style={{ flex: 1, padding: activeGame ? "28px 20px 20px" : "28px 20px 100px", overflowY: "auto" }}>
+          {activeGame ? (
+            <GameScreen theme={theme} gameId={activeGame} onExit={() => setActiveGame(null)} friends={friends} groups={groups} />
+          ) : tab === "home" ? (
+            <HomeScreen theme={theme} onSelectGame={(id) => setActiveGame(id)} ownedGames={ownedGames} />
+          ) : tab === "explore" ? (
+            <ExploreScreen theme={theme} ownedGames={ownedGames} onGetGame={(id) => setOwnedGames((o) => (o.includes(id) ? o : [...o, id]))} />
+          ) : tab === "friends" ? (
+            <FriendsScreen theme={theme} friends={friends} setFriends={setFriends} groups={groups} setGroups={setGroups} />
+          ) : (
+            <SettingsScreen theme={theme} themeKey={themeKey} setThemeKey={setThemeKey} />
+          )}
+        </div>
+        {!activeGame && <NavBar theme={theme} tab={tab} setTab={setTab} />}
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+<script>
+  if (!navigator.onLine) document.getElementById('offline-banner').style.display = 'block';
+  window.addEventListener('online', () => { document.getElementById('offline-banner').style.display = 'none'; });
+  window.addEventListener('offline', () => { document.getElementById('offline-banner').style.display = 'block'; });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
