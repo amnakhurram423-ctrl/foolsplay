@@ -9,12 +9,16 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body, #root { margin: 0; padding: 0; height: 100%; }
-  body { -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+  body { -webkit-font-smoothing: antialiased; overscroll-behavior: none; background:#17181c; }
   input, textarea { font-family: inherit; }
   #offline-banner {
     display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 999;
     background: #2c2f36; color: #eceef1; font-family: sans-serif; font-size: 12.5px;
     text-align: center; padding: 6px 10px;
+  }
+  #boot-error {
+    display: none; color: #ff6b6b; padding: 20px; white-space: pre-wrap;
+    font-family: monospace; font-size: 12px; line-height: 1.5;
   }
 </style>
 <script type="importmap">
@@ -22,9 +26,7 @@
   "imports": {
     "react": "https://esm.sh/react@18.3.1",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react",
-    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-    "react/jsx-dev-runtime": "https://esm.sh/react@18.3.1/jsx-dev-runtime"
+    "lucide-react": "https://esm.sh/lucide-react@0.383.0?external=react"
   }
 }
 </script>
@@ -33,7 +35,10 @@
 <body>
 <div id="offline-banner">You're offline — playing from the saved version.</div>
 <div id="root"></div>
-<script type="text/babel" data-type="module" data-presets="react">
+<pre id="boot-error"></pre>
+
+<script type="text/plain" id="app-source">
+
 import React, { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import {
@@ -44,6 +49,10 @@ import {
   BookOpen, HelpCircle, FolderPlus, ChevronDown, Send
 } from "lucide-react";
 
+
+/* ---------------------------------------------------------
+   THEMES — 4 distinct token systems
+--------------------------------------------------------- */
 const THEMES = {
   dark: {
     name: "Dark", bg: "#17181c",
@@ -90,6 +99,9 @@ function useFonts() {
   }, []);
 }
 
+/* ---------------------------------------------------------
+   GAME DATA
+--------------------------------------------------------- */
 const CORE_GAMES = [
   { id: "mafia", name: "Mafia", tagline: "Trust no one.", icon: Skull, color: "#7c8cff" },
   { id: "imposter", name: "Imposter", tagline: "One of you doesn't belong.", icon: Search, color: "#ff6b6b" },
@@ -97,6 +109,7 @@ const CORE_GAMES = [
   { id: "truthdare", name: "Truth & Dare", tagline: "Choose wisely.", icon: MessageCircleQuestion, color: "#e5772d" },
 ];
 
+// Games available in Explore. Once "owned" they appear on Home and are playable.
 const EXPLORE_GAMES = [
   { id: "werewolf", name: "Werewolf", tagline: "A moonlit twist on Mafia.", desc: "A moonlit twist on Mafia with a Seer instead of a Detective.", price: "Free", icon: Moon, color: "#9d7cff" },
   { id: "codenames", name: "Codenames Party", tagline: "Guess your team's words first.", desc: "Split into two teams, guess the secret words on the board.", price: "$2.99", icon: Grid3x3, color: "#00e5c7" },
@@ -233,9 +246,11 @@ const NEVER_HAVE_I_EVER = [
   "Never have I ever rewatched an entire show just for comfort.",
   "Never have I ever sent a risky text and immediately regretted it.",
 ];
-
 const DEFAULT_GROUPS = ["Family", "Cousins", "Friends"];
 
+/* ---------------------------------------------------------
+   SMALL UI PRIMITIVES
+--------------------------------------------------------- */
 function Card({ theme, children, style, onClick }) {
   return (
     <div onClick={onClick} style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: theme.radius, ...style }}>
@@ -356,9 +371,10 @@ const HOW_TO_PLAY = {
   truthdare: {
     steps: [
       "Add all the players.",
-      "Spin the wheel — whoever it lands on gets to choose.",
+      "Each round picks a random player.",
+      "They choose Truth or Dare.",
       "Answer honestly, or complete the dare — group's honor system enforces it.",
-      "Spin again to keep the game going as long as you like.",
+      "Tap Next player to keep the game going as long as you like.",
     ],
   },
   charades: {
@@ -439,9 +455,13 @@ function stepperBtn(theme, disabled) {
   return { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${theme.border}`, background: theme.surfaceAlt, color: theme.text, display: "flex", alignItems: "center", justifyContent: "center", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.35 : 1 };
 }
 
+/* ---------------------------------------------------------
+   PLAYER SETUP (shared by all games) — with friend quick-add
+--------------------------------------------------------- */
 function PlayerSetup({ theme, minPlayers, onStart, gameColor, extraSettings, friends = [], groups = [], initialPlayers = [] }) {
   const [players, setPlayers] = useState(initialPlayers);
   const [name, setName] = useState("");
+  const [groupsOpen, setGroupsOpen] = useState(friends.length > 0);
   const code = useRef(genCode()).current;
 
   const addPlayer = (nameToAdd) => {
@@ -548,19 +568,114 @@ function PlayerSetup({ theme, minPlayers, onStart, gameColor, extraSettings, fri
   );
 }
 
-function RatioRow({ theme, label, value, onChange, color, locked }) {
+/* ---------------------------------------------------------
+   REVEAL CARD — press & hold to see role/word
+--------------------------------------------------------- */
+/* ---------------------------------------------------------
+   ROLE SILHOUETTE ART — stylized character badges per role,
+   colored in the role's own color with a role-specific accessory.
+--------------------------------------------------------- */
+function RoleSilhouette({ role, color, size = 90 }) {
+  const key = (role || "").toLowerCase();
+  const dark = "rgba(0,0,0,0.42)";
+  const light = "rgba(255,255,255,0.9)";
+
+  const shoulders = <path d="M18,94 Q18,58 50,58 Q82,58 82,94 Z" fill={color} />;
+  const plainHead = <circle cx="50" cy="34" r="17" fill={color} />;
+
+  let head = plainHead;
+  let accessory = null;
+
+  if (key.includes("mafia")) {
+    accessory = (
+      <g>
+        <path d="M30,22 Q30,6 50,6 Q70,6 70,22 L70,25 L30,25 Z" fill={dark} />
+        <ellipse cx="50" cy="25" rx="26" ry="5" fill={dark} />
+        <rect x="34" y="19" width="32" height="4" fill={color} opacity="0.55" />
+      </g>
+    );
+  } else if (key.includes("detective")) {
+    accessory = (
+      <g>
+        <path d="M32,20 Q32,4 50,4 Q68,4 68,20 Z" fill={dark} />
+        <ellipse cx="26" cy="28" rx="6.5" ry="10" fill={dark} />
+        <ellipse cx="74" cy="28" rx="6.5" ry="10" fill={dark} />
+        <circle cx="86" cy="52" r="9" fill="none" stroke={dark} strokeWidth="3.2" />
+        <line x1="93" y1="59" x2="99" y2="65" stroke={dark} strokeWidth="3.2" strokeLinecap="round" />
+      </g>
+    );
+  } else if (key.includes("doctor")) {
+    accessory = (
+      <g>
+        <circle cx="50" cy="20" r="5.5" fill="none" stroke={dark} strokeWidth="3" />
+        <circle cx="50" cy="20" r="1.6" fill={dark} />
+        <path d="M26,60 Q18,76 32,86 Q40,91 46,83" fill="none" stroke={dark} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M74,60 Q82,76 68,86" fill="none" stroke={dark} strokeWidth="3.4" strokeLinecap="round" />
+        <circle cx="46" cy="83" r="4.2" fill={dark} />
+      </g>
+    );
+  } else if (key.includes("jester")) {
+    head = null;
+    accessory = (
+      <g>
+        <path d="M50,2 L58,26 Q50,20 42,26 Z" fill={dark} />
+        <path d="M22,30 L44,26 Q34,34 30,44 Z" fill={dark} />
+        <path d="M78,30 L56,26 Q66,34 70,44 Z" fill={dark} />
+        <circle cx="50" cy="4" r="3" fill={color} />
+        <circle cx="22" cy="30" r="3" fill={color} />
+        <circle cx="78" cy="30" r="3" fill={color} />
+        <circle cx="50" cy="34" r="17" fill={color} />
+      </g>
+    );
+  } else if (key.includes("werewolf")) {
+    accessory = (
+      <g>
+        <path d="M30,22 L22,4 L38,16 Z" fill={dark} />
+        <path d="M70,22 L78,4 L62,16 Z" fill={dark} />
+        <path d="M42,44 L46,50 L50,44 Z" fill={light} />
+        <path d="M50,44 L54,50 L58,44 Z" fill={light} />
+      </g>
+    );
+  } else if (key.includes("seer")) {
+    head = null;
+    accessory = (
+      <g>
+        <path d="M50,4 Q30,10 28,34 Q28,44 50,48 Q72,44 72,34 Q70,10 50,4 Z" fill={color} />
+        <circle cx="50" cy="26" r="6" fill={dark} />
+        <circle cx="50" cy="72" r="9" fill="none" stroke={dark} strokeWidth="3" />
+        <circle cx="50" cy="72" r="3" fill={dark} />
+      </g>
+    );
+  } else if (key.includes("imposter")) {
+    head = null;
+    accessory = (
+      <g>
+        <path d="M50,4 Q26,14 26,40 Q26,50 50,52 Q74,50 74,40 Q74,14 50,4 Z" fill={color} />
+        <circle cx="41" cy="32" r="3.2" fill={light} />
+        <circle cx="59" cy="32" r="3.2" fill={light} />
+      </g>
+    );
+  } else if (key.includes("villager") || key.includes("civilian")) {
+    accessory = <path d="M40,52 Q50,58 60,52" fill="none" stroke={dark} strokeWidth="2.6" strokeLinecap="round" />;
+  } else {
+    accessory = (
+      <text x="50" y="41" textAnchor="middle" fontSize="20" fontWeight="700" fill={dark} fontFamily="Inter, sans-serif">?</text>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px" }}>
-      <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={() => onChange(value - 1)} disabled={locked} style={stepperBtn(theme, locked)}><Minus size={13} /></button>
-        <span style={{ width: 18, textAlign: "center", fontWeight: 700, color, fontFamily: "Inter, sans-serif" }}>{value}</span>
-        <button onClick={() => onChange(value + 1)} disabled={locked} style={stepperBtn(theme, locked)}><Plus size={13} /></button>
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}>
+      {shoulders}
+      {head}
+      {accessory}
+    </svg>
   );
 }
 
+/* ---------------------------------------------------------
+   FLIP-CARD CHARACTER ART — illustrated SVG portraits shown
+   on the front face of the reveal card once it's flipped.
+--------------------------------------------------------- */
 function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isFirst }) {
   const [held, setHeld] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -578,7 +693,10 @@ function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isF
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0" }}>
+      {/* perspective wrapper — must be a separate element from the flipping card itself */}
       <div style={{ width: "100%", maxWidth: 260, perspective: 1200, position: "relative" }}>
+        {/* Blink feedback on Next/Previous — sits outside the 3D flip so it's visible
+            no matter which face (front or back) the card happens to be showing. */}
         <div style={{ position: "absolute", inset: 0, borderRadius: theme.radius, background: theme.text, opacity: flash ? 0.3 : 0, transition: "opacity 130ms ease", pointerEvents: "none", zIndex: 5 }} />
         <div
           style={{
@@ -588,6 +706,7 @@ function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isF
             transition: "transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
           }}
         >
+          {/* BACK — identical for every role, no color hint before it's held */}
           <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", background: theme.surfaceAlt, border: `2px solid ${theme.border}`, borderRadius: theme.radius, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
             <div style={{ width: 56, height: 56, borderRadius: "50%", background: theme.surface, border: `1px solid ${theme.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textDim }}>
               <EyeOff size={24} />
@@ -595,6 +714,7 @@ function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isF
             <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: theme.textDim, textAlign: "center", padding: "0 16px" }}>Hold the button below to reveal</div>
           </div>
 
+          {/* FRONT — only ever visible once flipped/held */}
           <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: theme.surface, border: `2px solid ${color}`, borderRadius: theme.radius, padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, textAlign: "center" }}>
             <Eye size={28} color={color} />
             <div style={{ fontFamily: theme.font, fontSize: 24, fontWeight: 700, color: theme.text }}>{label}</div>
@@ -603,6 +723,9 @@ function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isF
         </div>
       </div>
 
+      {/* The ONLY touch target that reveals the card — everything else (the card
+          itself, its text) is inert, so a stray tap on the card never flips it
+          for onlookers to see. */}
       <div
         onMouseDown={() => setHeld(true)} onMouseUp={() => setHeld(false)} onMouseLeave={() => setHeld(false)}
         onTouchStart={(e) => { e.preventDefault(); setHeld(true); }} onTouchEnd={() => setHeld(false)}
@@ -629,7 +752,22 @@ function RevealCard({ theme, label, sublabel, color, onNext, onPrev, isLast, isF
     </div>
   );
 }
+function RatioRow({ theme, label, value, onChange, color, locked }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 4px" }}>
+      <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => onChange(value - 1)} disabled={locked} style={stepperBtn(theme, locked)}><Minus size={13} /></button>
+        <span style={{ width: 18, textAlign: "center", fontWeight: 700, color, fontFamily: "Inter, sans-serif" }}>{value}</span>
+        <button onClick={() => onChange(value + 1)} disabled={locked} style={stepperBtn(theme, locked)}><Plus size={13} /></button>
+      </div>
+    </div>
+  );
+}
 
+/* ---------------------------------------------------------
+   MAFIA
+--------------------------------------------------------- */
 function HostRoleSummary({ theme, players, roles, roleColor }) {
   const [revealed, setRevealed] = useState(false);
   if (!revealed) {
@@ -652,7 +790,10 @@ function HostRoleSummary({ theme, players, roles, roleColor }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {players.map((p, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 4px" }}>
-            <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{p}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <RoleSilhouette role={roles[i]} color={roleColor[roles[i]]} size={26} />
+              <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: theme.text }}>{p}</span>
+            </div>
             <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, fontWeight: 700, color: roleColor[roles[i]] }}>{roles[i]}</span>
           </div>
         ))}
@@ -670,7 +811,7 @@ function MafiaGame({ theme, onExit, friends, groups }) {
   const [idx, setIdx] = useState(0);
   const [mafiaCount, setMafiaCount] = useState(1);
   const [detectiveCount, setDetectiveCount] = useState(1);
-  const [customRoles, setCustomRoles] = useState([]);
+  const [customRoles, setCustomRoles] = useState([]); // [{ id, name, count }]
 
   const roleColor = { Mafia: "#ff6b6b", Detective: "#7c8cff", Civilian: theme.textDim };
   customRoles.forEach((r, i) => { roleColor[r.name] = CUSTOM_ROLE_PALETTE[i % CUSTOM_ROLE_PALETTE.length]; });
@@ -693,7 +834,10 @@ function MafiaGame({ theme, onExit, friends, groups }) {
       <PlayerSetup
         theme={theme} minPlayers={3} gameColor="#7c8cff" onStart={start} friends={friends} groups={groups} initialPlayers={players}
         extraSettings={(count) => (
-          <MafiaSettings theme={theme} playerCount={count} mafia={mafiaCount} detective={detectiveCount} setMafia={setMafiaCount} setDetective={setDetectiveCount} customRoles={customRoles} setCustomRoles={setCustomRoles} />
+          <MafiaSettings
+            theme={theme} playerCount={count} mafia={mafiaCount} detective={detectiveCount} setMafia={setMafiaCount} setDetective={setDetectiveCount}
+            customRoles={customRoles} setCustomRoles={setCustomRoles}
+          />
         )}
       />
     );
@@ -729,7 +873,7 @@ function MafiaSettings({ theme, playerCount, mafia, detective, setMafia, setDete
   const specialTotal = mafia + detective + customRoles.reduce((s, r) => s + r.count, 0);
   const civilians = Math.max(playerCount - specialTotal, 0);
   const maxMafia = Math.max(playerCount - detective - customRoles.reduce((s, r) => s + r.count, 0) - 1, 1);
-  useEffect(() => { if (mafia > maxMafia) setMafia(maxMafia); }, [playerCount, customRoles.length]);
+  useEffect(() => { if (mafia > maxMafia) setMafia(maxMafia); }, [playerCount, customRoles.length]); // eslint-disable-line
 
   const addRole = () => {
     const n = newRoleName.trim();
@@ -779,6 +923,9 @@ function MafiaSettings({ theme, playerCount, mafia, detective, setMafia, setDete
   );
 }
 
+/* ---------------------------------------------------------
+   WEREWOLF — Mafia's moonlit twin (Seer instead of Detective)
+--------------------------------------------------------- */
 function WerewolfGame({ theme, onExit, friends, groups }) {
   const [phase, setPhase] = useState("setup");
   const [players, setPlayers] = useState([]);
@@ -842,6 +989,9 @@ function WerewolfGame({ theme, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   IMPOSTER
+--------------------------------------------------------- */
 function ImposterGame({ theme, onExit, friends, groups }) {
   const [phase, setPhase] = useState("setup");
   const [players, setPlayers] = useState([]);
@@ -879,7 +1029,7 @@ function ImposterGame({ theme, onExit, friends, groups }) {
             </div>
           </div>
         </Card>
-        <PlayerSetup theme={theme} minPlayers={3} gameColor="#ff6b6b" onStart={start} friends={friends} groups={groups} />
+        <PlayerSetup theme={theme} minPlayers={3} gameColor="#ff6b6b" onStart={start} friends={friends} groups={groups} initialPlayers={players} />
       </div>
     );
   }
@@ -908,6 +1058,219 @@ function ImposterGame({ theme, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   TRUTH OR DARE
+--------------------------------------------------------- */
+function SpinWheel({ theme, players, gameColor, stage, rotation, onSpin }) {
+  const n = players.length;
+  const segAngle = 360 / n;
+  const colors = players.map((_, i) => (i % 2 === 0 ? gameColor : theme.surfaceAlt));
+  const gradient = `conic-gradient(${colors.map((c, i) => `${c} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ")})`;
+  const spinning = stage !== "idle";
+
+  const transition =
+    stage === "spin" ? "transform 6.5s cubic-bezier(0.1, 0.85, 0.15, 1)" :
+    stage === "settle" ? "transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1)" :
+    "none";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0" }}>
+      <div style={{ position: "relative", width: 240, height: 240, marginBottom: 22 }}>
+        <div style={{ position: "absolute", top: -6, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "9px solid transparent", borderRight: "9px solid transparent", borderTop: `16px solid ${theme.text}`, zIndex: 2 }} />
+        <div
+          style={{
+            width: 240, height: 240, borderRadius: "50%", background: gradient,
+            border: `3px solid ${theme.border}`, position: "relative",
+            transform: `rotate(${rotation}deg)`,
+            transition,
+          }}
+        >
+          {players.map((p, i) => {
+            const angle = i * segAngle + segAngle / 2;
+            return (
+              <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0, transform: `rotate(${angle}deg)` }}>
+                <span style={{ position: "absolute", left: -40, top: -100, width: 80, textAlign: "center", fontFamily: "Inter, sans-serif", fontSize: 11.5, fontWeight: 700, color: i % 2 === 0 ? (theme.name === "Classroom" ? "#fffdf8" : "#0a0a0a") : theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {p}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ position: "absolute", top: "50%", left: "50%", width: 42, height: 42, marginTop: -21, marginLeft: -21, borderRadius: "50%", background: theme.surface, border: `2px solid ${theme.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Shuffle size={16} color={theme.textDim} />
+        </div>
+      </div>
+      <Button theme={theme} onClick={onSpin} disabled={spinning} icon={RotateCcw} style={{ background: gameColor, color: "#1c1310" }}>
+        {stage === "spin" ? "Spinning..." : stage === "settle" ? "Almost there..." : "Spin the wheel"}
+      </Button>
+    </div>
+  );
+}
+
+function TruthDareGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [phase, setPhase] = useState("wheel"); // wheel -> spinning -> chosen
+  const [rotation, setRotation] = useState(0);
+  const [spinStage, setSpinStage] = useState("idle"); // idle -> spin -> settle
+  const [current, setCurrent] = useState(null);
+  const [choice, setChoice] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [used, setUsed] = useState({ truth: [], dare: [] });
+  const [round, setRound] = useState(0);
+  const spinTimeoutRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spin = () => {
+    if (spinStage !== "idle" || !players) return;
+    const idx = Math.floor(Math.random() * players.length);
+    const segAngle = 360 / players.length;
+    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    const additional = ((targetMod - currentMod) + 360) % 360;
+    const overshoot = 6;
+    setCurrent(players[idx]);
+    setSpinStage("spin");
+    setRotation(rotation + 360 * 5 + additional + overshoot);
+    clearTimeout(spinTimeoutRef.current);
+    // First the wheel decelerates into the pocket, overshooting slightly — then a
+    // short "settle" snaps it back onto the exact winner, like a real wheel of
+    // fortune easing to a stop instead of just halting abruptly.
+    spinTimeoutRef.current = setTimeout(() => {
+      setSpinStage("settle");
+      setRotation((r) => r - overshoot);
+      spinTimeoutRef.current = setTimeout(() => {
+        setSpinStage("idle");
+        setPhase("chosen");
+      }, 550);
+    }, 6500);
+  };
+
+  const pick = (type) => {
+    const bank = type === "truth" ? TRUTHS : DARES;
+    const usedList = used[type];
+    let availableIdx = bank.map((_, i) => i).filter((i) => !usedList.includes(i));
+    if (availableIdx.length === 0) availableIdx = bank.map((_, i) => i);
+    const i = availableIdx[Math.floor(Math.random() * availableIdx.length)];
+    setUsed((u) => ({ ...u, [type]: [...u[type], i] }));
+    setPrompt(bank[i]); setChoice(type);
+  };
+
+  const nextTurn = () => { setChoice(null); setPrompt(""); setRound((r) => r + 1); setPhase("wheel"); };
+
+  if (!players) {
+    return (
+      <PlayerSetup theme={theme} minPlayers={2} gameColor="#e5772d" friends={friends} groups={groups} initialPlayers={lastPlayers}
+        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Truth & Dare" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      {phase !== "chosen" ? (
+        <SpinWheel theme={theme} players={players} gameColor="#e5772d" stage={spinStage} rotation={rotation} onSpin={spin} />
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>The wheel picked</div>
+            <div style={{ fontFamily: theme.font, fontSize: 32, fontWeight: 700, color: "#e5772d" }}>{current}</div>
+          </div>
+          {!choice ? (
+            <div style={{ display: "flex", gap: 12 }}>
+              <Button theme={theme} onClick={() => pick("truth")} style={{ flex: 1, padding: "20px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` }}>Truth</Button>
+              <Button theme={theme} onClick={() => pick("dare")} style={{ flex: 1, padding: "20px", background: "#e5772d", color: "#1c1310" }}>Dare</Button>
+            </div>
+          ) : (
+            <Card theme={theme} style={{ padding: 24, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: choice === "dare" ? "#e5772d" : theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, fontWeight: 700 }}>{choice}</div>
+              <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
+            </Card>
+          )}
+          {choice && <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", marginTop: 20, background: "#e5772d", color: "#1c1310" }}>Spin for next player</Button>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function NeverHaveIEverGame({ theme, onExit, friends, groups }) {
+  const [players, setPlayers] = useState(null);
+  const [lastPlayers, setLastPlayers] = useState([]);
+  const [phase, setPhase] = useState("wheel");
+  const [rotation, setRotation] = useState(0);
+  const [spinStage, setSpinStage] = useState("idle"); // idle -> spin -> settle
+  const [current, setCurrent] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [used, setUsed] = useState([]);
+  const [round, setRound] = useState(0);
+  const spinTimeoutRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
+
+  const spin = () => {
+    if (spinStage !== "idle" || !players) return;
+    const idx = Math.floor(Math.random() * players.length);
+    const segAngle = 360 / players.length;
+    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    const additional = ((targetMod - currentMod) + 360) % 360;
+    const overshoot = 6;
+    setCurrent(players[idx]);
+
+    let available = NEVER_HAVE_I_EVER.map((_, i) => i).filter((i) => !used.includes(i));
+    if (available.length === 0) available = NEVER_HAVE_I_EVER.map((_, i) => i);
+    const pIdx = available[Math.floor(Math.random() * available.length)];
+    setUsed((u) => [...u, pIdx]);
+    setPrompt(NEVER_HAVE_I_EVER[pIdx]);
+
+    setSpinStage("spin");
+    setRotation(rotation + 360 * 5 + additional + overshoot);
+    clearTimeout(spinTimeoutRef.current);
+    spinTimeoutRef.current = setTimeout(() => {
+      setSpinStage("settle");
+      setRotation((r) => r - overshoot);
+      spinTimeoutRef.current = setTimeout(() => {
+        setSpinStage("idle");
+        setPhase("chosen");
+      }, 550);
+    }, 6500);
+  };
+
+  const nextTurn = () => { setRound((r) => r + 1); setPhase("wheel"); };
+
+  if (!players) {
+    return (
+      <PlayerSetup theme={theme} minPlayers={2} gameColor="#f7c948" friends={friends} groups={groups} initialPlayers={lastPlayers}
+        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
+    );
+  }
+
+  return (
+    <div>
+      <ScreenHeader theme={theme} title="Never Have I Ever" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
+      {phase !== "chosen" ? (
+        <SpinWheel theme={theme} players={players} gameColor="#f7c948" stage={spinStage} rotation={rotation} onSpin={spin} />
+      ) : (
+        <>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{current} reads it out</div>
+          </div>
+          <Card theme={theme} style={{ padding: 24, textAlign: "center", marginBottom: 20 }}>
+            <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
+          </Card>
+          <p style={{ fontSize: 12.5, color: theme.textDim, fontFamily: "Inter, sans-serif", textAlign: "center", marginBottom: 18 }}>Anyone who HAS done it puts a finger down (or takes a sip).</p>
+          <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", background: "#f7c948", color: "#1c1310" }}>Spin for next round</Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------
+   CHARADES — heads up style
+--------------------------------------------------------- */
 function CharadesGame({ theme, onExit }) {
   const [phase, setPhase] = useState("setup");
   const [category, setCategory] = useState("Animals");
@@ -991,210 +1354,9 @@ function CharadesGame({ theme, onExit }) {
   );
 }
 
-function SpinWheel({ theme, players, gameColor, stage, rotation, onSpin }) {
-  const n = players.length;
-  const segAngle = 360 / n;
-  const colors = players.map((_, i) => (i % 2 === 0 ? gameColor : theme.surfaceAlt));
-  const gradient = `conic-gradient(${colors.map((c, i) => `${c} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ")})`;
-  const spinning = stage !== "idle";
-
-  const transition =
-    stage === "spin" ? "transform 6.5s cubic-bezier(0.1, 0.85, 0.15, 1)" :
-    stage === "settle" ? "transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1)" :
-    "none";
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0" }}>
-      <div style={{ position: "relative", width: 240, height: 240, marginBottom: 22 }}>
-        <div style={{ position: "absolute", top: -6, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "9px solid transparent", borderRight: "9px solid transparent", borderTop: `16px solid ${theme.text}`, zIndex: 2 }} />
-        <div
-          style={{
-            width: 240, height: 240, borderRadius: "50%", background: gradient,
-            border: `3px solid ${theme.border}`, position: "relative",
-            transform: `rotate(${rotation}deg)`,
-            transition,
-          }}
-        >
-          {players.map((p, i) => {
-            const angle = i * segAngle + segAngle / 2;
-            return (
-              <div key={i} style={{ position: "absolute", top: "50%", left: "50%", width: 0, height: 0, transform: `rotate(${angle}deg)` }}>
-                <span style={{ position: "absolute", left: -40, top: -100, width: 80, textAlign: "center", fontFamily: "Inter, sans-serif", fontSize: 11.5, fontWeight: 700, color: i % 2 === 0 ? (theme.name === "Classroom" ? "#fffdf8" : "#0a0a0a") : theme.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {p}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ position: "absolute", top: "50%", left: "50%", width: 42, height: 42, marginTop: -21, marginLeft: -21, borderRadius: "50%", background: theme.surface, border: `2px solid ${theme.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Shuffle size={16} color={theme.textDim} />
-        </div>
-      </div>
-      <Button theme={theme} onClick={onSpin} disabled={spinning} icon={RotateCcw} style={{ background: gameColor, color: "#1c1310" }}>
-        {stage === "spin" ? "Spinning..." : stage === "settle" ? "Almost there..." : "Spin the wheel"}
-      </Button>
-    </div>
-  );
-}
-
-function TruthDareGame({ theme, onExit, friends, groups }) {
-  const [players, setPlayers] = useState(null);
-  const [lastPlayers, setLastPlayers] = useState([]);
-  const [phase, setPhase] = useState("wheel");
-  const [rotation, setRotation] = useState(0);
-  const [spinStage, setSpinStage] = useState("idle");
-  const [current, setCurrent] = useState(null);
-  const [choice, setChoice] = useState(null);
-  const [prompt, setPrompt] = useState("");
-  const [used, setUsed] = useState({ truth: [], dare: [] });
-  const [round, setRound] = useState(0);
-  const spinTimeoutRef = useRef(null);
-
-  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
-
-  const spin = () => {
-    if (spinStage !== "idle" || !players) return;
-    const idx = Math.floor(Math.random() * players.length);
-    const segAngle = 360 / players.length;
-    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
-    const currentMod = ((rotation % 360) + 360) % 360;
-    const additional = ((targetMod - currentMod) + 360) % 360;
-    const overshoot = 6;
-    setCurrent(players[idx]);
-    setSpinStage("spin");
-    setRotation(rotation + 360 * 5 + additional + overshoot);
-    clearTimeout(spinTimeoutRef.current);
-    spinTimeoutRef.current = setTimeout(() => {
-      setSpinStage("settle");
-      setRotation((r) => r - overshoot);
-      spinTimeoutRef.current = setTimeout(() => {
-        setSpinStage("idle");
-        setPhase("chosen");
-      }, 550);
-    }, 6500);
-  };
-
-  const pick = (type) => {
-    const bank = type === "truth" ? TRUTHS : DARES;
-    const usedList = used[type];
-    let availableIdx = bank.map((_, i) => i).filter((i) => !usedList.includes(i));
-    if (availableIdx.length === 0) availableIdx = bank.map((_, i) => i);
-    const i = availableIdx[Math.floor(Math.random() * availableIdx.length)];
-    setUsed((u) => ({ ...u, [type]: [...u[type], i] }));
-    setPrompt(bank[i]); setChoice(type);
-  };
-
-  const nextTurn = () => { setChoice(null); setPrompt(""); setRound((r) => r + 1); setPhase("wheel"); };
-
-  if (!players) {
-    return (
-      <PlayerSetup theme={theme} minPlayers={2} gameColor="#e5772d" friends={friends} groups={groups} initialPlayers={lastPlayers}
-        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
-    );
-  }
-
-  return (
-    <div>
-      <ScreenHeader theme={theme} title="Truth & Dare" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
-      {phase !== "chosen" ? (
-        <SpinWheel theme={theme} players={players} gameColor="#e5772d" stage={spinStage} rotation={rotation} onSpin={spin} />
-      ) : (
-        <>
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>The wheel picked</div>
-            <div style={{ fontFamily: theme.font, fontSize: 32, fontWeight: 700, color: "#e5772d" }}>{current}</div>
-          </div>
-          {!choice ? (
-            <div style={{ display: "flex", gap: 12 }}>
-              <Button theme={theme} onClick={() => pick("truth")} style={{ flex: 1, padding: "20px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` }}>Truth</Button>
-              <Button theme={theme} onClick={() => pick("dare")} style={{ flex: 1, padding: "20px", background: "#e5772d", color: "#1c1310" }}>Dare</Button>
-            </div>
-          ) : (
-            <Card theme={theme} style={{ padding: 24, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: choice === "dare" ? "#e5772d" : theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, fontWeight: 700 }}>{choice}</div>
-              <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
-            </Card>
-          )}
-          {choice && <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", marginTop: 20, background: "#e5772d", color: "#1c1310" }}>Spin for next player</Button>}
-        </>
-      )}
-    </div>
-  );
-}
-
-function NeverHaveIEverGame({ theme, onExit, friends, groups }) {
-  const [players, setPlayers] = useState(null);
-  const [lastPlayers, setLastPlayers] = useState([]);
-  const [phase, setPhase] = useState("wheel");
-  const [rotation, setRotation] = useState(0);
-  const [spinStage, setSpinStage] = useState("idle");
-  const [current, setCurrent] = useState(null);
-  const [prompt, setPrompt] = useState("");
-  const [used, setUsed] = useState([]);
-  const [round, setRound] = useState(0);
-  const spinTimeoutRef = useRef(null);
-
-  useEffect(() => () => clearTimeout(spinTimeoutRef.current), []);
-
-  const spin = () => {
-    if (spinStage !== "idle" || !players) return;
-    const idx = Math.floor(Math.random() * players.length);
-    const segAngle = 360 / players.length;
-    const targetMod = (360 - (idx * segAngle + segAngle / 2) + 360) % 360;
-    const currentMod = ((rotation % 360) + 360) % 360;
-    const additional = ((targetMod - currentMod) + 360) % 360;
-    const overshoot = 6;
-    setCurrent(players[idx]);
-
-    let available = NEVER_HAVE_I_EVER.map((_, i) => i).filter((i) => !used.includes(i));
-    if (available.length === 0) available = NEVER_HAVE_I_EVER.map((_, i) => i);
-    const pIdx = available[Math.floor(Math.random() * available.length)];
-    setUsed((u) => [...u, pIdx]);
-    setPrompt(NEVER_HAVE_I_EVER[pIdx]);
-
-    setSpinStage("spin");
-    setRotation(rotation + 360 * 5 + additional + overshoot);
-    clearTimeout(spinTimeoutRef.current);
-    spinTimeoutRef.current = setTimeout(() => {
-      setSpinStage("settle");
-      setRotation((r) => r - overshoot);
-      spinTimeoutRef.current = setTimeout(() => {
-        setSpinStage("idle");
-        setPhase("chosen");
-      }, 550);
-    }, 6500);
-  };
-
-  const nextTurn = () => { setRound((r) => r + 1); setPhase("wheel"); };
-
-  if (!players) {
-    return (
-      <PlayerSetup theme={theme} minPlayers={2} gameColor="#f7c948" friends={friends} groups={groups} initialPlayers={lastPlayers}
-        onStart={(list) => { setPlayers(list); setRound(1); setPhase("wheel"); }} />
-    );
-  }
-
-  return (
-    <div>
-      <ScreenHeader theme={theme} title="Never Have I Ever" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
-      {phase !== "chosen" ? (
-        <SpinWheel theme={theme} players={players} gameColor="#f7c948" stage={spinStage} rotation={rotation} onSpin={spin} />
-      ) : (
-        <>
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
-            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{current} reads it out</div>
-          </div>
-          <Card theme={theme} style={{ padding: 24, textAlign: "center", marginBottom: 20 }}>
-            <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
-          </Card>
-          <p style={{ fontSize: 12.5, color: theme.textDim, fontFamily: "Inter, sans-serif", textAlign: "center", marginBottom: 18 }}>Anyone who HAS done it puts a finger down (or takes a sip).</p>
-          <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", background: "#f7c948", color: "#1c1310" }}>Spin for next round</Button>
-        </>
-      )}
-    </div>
-  );
-}
-
+/* ---------------------------------------------------------
+   WOULD YOU RATHER
+--------------------------------------------------------- */
 function WouldYouRatherGame({ theme, onExit, friends, groups }) {
   const [players, setPlayers] = useState(null);
   const [lastPlayers, setLastPlayers] = useState([]);
@@ -1232,6 +1394,9 @@ function WouldYouRatherGame({ theme, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   STORY CHAIN
+--------------------------------------------------------- */
 function StoryChainGame({ theme, onExit, friends, groups }) {
   const [players, setPlayers] = useState(null);
   const [lastPlayers, setLastPlayers] = useState([]);
@@ -1295,6 +1460,9 @@ function StoryChainGame({ theme, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   CODENAMES PARTY — simplified team word-grid
+--------------------------------------------------------- */
 function CodenamesGame({ theme, onExit, friends, groups }) {
   const [players, setPlayers] = useState(null);
   const [lastPlayers, setLastPlayers] = useState([]);
@@ -1377,6 +1545,9 @@ function CodenamesGame({ theme, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   HOME / EXPLORE / FRIENDS / SETTINGS
+--------------------------------------------------------- */
 function GameCard({ theme, g, onClick }) {
   const Icon = g.icon;
   return (
@@ -1493,7 +1664,7 @@ function ExploreScreen({ theme, ownedGames, onGetGame }) {
 function FriendsScreen({ theme, friends, setFriends, groups, setGroups }) {
   const [handle, setHandle] = useState("");
   const [newGroup, setNewGroup] = useState("");
-  const [addingGroupFor, setAddingGroupFor] = useState(null);
+  const [addingGroupFor, setAddingGroupFor] = useState(null); // friend id whose group-picker is open
 
   const addFriend = () => {
     const n = handle.trim();
@@ -1635,6 +1806,9 @@ function SettingsScreen({ theme, themeKey, setThemeKey }) {
   );
 }
 
+/* ---------------------------------------------------------
+   GAME ROUTER
+--------------------------------------------------------- */
 function GameScreen({ theme, gameId, onExit, friends, groups }) {
   const meta = CORE_GAMES.find((g) => g.id === gameId) || EXPLORE_GAMES.find((g) => g.id === gameId);
   const [showHowTo, setShowHowTo] = useState(false);
@@ -1655,6 +1829,9 @@ function GameScreen({ theme, gameId, onExit, friends, groups }) {
   );
 }
 
+/* ---------------------------------------------------------
+   NAV
+--------------------------------------------------------- */
 function NavBar({ theme, tab, setTab }) {
   const items = [
     { id: "home", label: "Home", icon: Home },
@@ -1690,8 +1867,14 @@ function NavBar({ theme, tab, setTab }) {
   );
 }
 
+/* ---------------------------------------------------------
+   APP ROOT
+--------------------------------------------------------- */
 const STORAGE_KEY = "partyAppState";
 
+// Works two ways with the same code: inside Claude's artifact preview it uses
+// the built-in window.storage; once deployed as a real site (no window.storage
+// present) it automatically falls back to the browser's own localStorage.
 async function loadSavedState() {
   try {
     if (typeof window !== "undefined" && window.storage) {
@@ -1714,6 +1897,7 @@ async function saveState(state) {
       localStorage.setItem(STORAGE_KEY, json);
     }
   } catch (e) {
+    // best-effort — if storage is unavailable, the app just won't persist
   }
 }
 
@@ -1732,6 +1916,7 @@ export default function App() {
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const theme = THEMES[themeKey];
 
+  // Load whatever was saved last time, once, on first mount.
   useEffect(() => {
     (async () => {
       const saved = await loadSavedState();
@@ -1745,6 +1930,8 @@ export default function App() {
     })();
   }, []);
 
+  // Save whenever the durable stuff changes — but only after the initial load
+  // finished, so we don't overwrite a real save with fresh defaults.
   useEffect(() => {
     if (!hydrated) return;
     saveState({ themeKey, friends, groups, ownedGames });
@@ -1772,9 +1959,12 @@ export default function App() {
   );
 }
 
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
+
 </script>
+
 <script>
   if (!navigator.onLine) document.getElementById('offline-banner').style.display = 'block';
   window.addEventListener('online', () => { document.getElementById('offline-banner').style.display = 'none'; });
@@ -1785,6 +1975,28 @@ root.render(<App />);
       navigator.serviceWorker.register('service-worker.js').catch(() => {});
     });
   }
+
+  // Manually transform + run the app instead of relying on Babel's automatic
+  // <script type="text/babel"> magic — that auto-mode needs a "react/jsx-runtime"
+  // import that trips up some CDN/import-map combinations. Compiling to plain
+  // React.createElement calls (classic runtime) sidesteps that fragile path
+  // entirely, and any error is shown right on the page instead of a blank screen.
+  (async () => {
+    try {
+      const source = document.getElementById('app-source').textContent;
+      const transformed = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+        filename: "app.jsx",
+      }).code;
+      const blob = new Blob([transformed], { type: "text/javascript" });
+      const url = URL.createObjectURL(blob);
+      await import(url);
+    } catch (err) {
+      const el = document.getElementById('boot-error');
+      el.style.display = 'block';
+      el.textContent = (err && err.stack) ? err.stack : String(err);
+    }
+  })();
 </script>
 </body>
 </html>
