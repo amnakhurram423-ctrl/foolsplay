@@ -39,17 +39,6 @@
 
 <script type="text/plain" id="app-source">
 
-import React, { useState, useEffect, useRef } from "react";
-import ReactDOM from "react-dom/client";
-import {
-  Home, Compass, Users, Settings, ChevronLeft, ChevronRight, Plus, Minus,
-  Eye, EyeOff, Play, X, Check, Copy, Crown, Skull, Search, Flame,
-  Sparkles, Timer, RotateCcw, UserPlus, Trash2, Lock, LogOut, User,
-  Gamepad2, Drama, MessageCircleQuestion, Shuffle, Moon, Grid3x3,
-  BookOpen, HelpCircle, FolderPlus, ChevronDown, Send
-} from "lucide-react";
-
-
 /* ---------------------------------------------------------
    THEMES — 4 distinct token systems
 --------------------------------------------------------- */
@@ -119,14 +108,17 @@ const EXPLORE_GAMES = [
 ];
 
 const WORD_BANK = {
-  Animals: ["Elephant", "Penguin", "Octopus", "Giraffe", "Kangaroo", "Dolphin", "Cheetah", "Owl", "Platypus", "Flamingo", "Otter", "Peacock"],
-  "Daily Life": ["Toothbrush", "Umbrella", "Backpack", "Alarm clock", "Coffee mug", "Sneakers", "Doorbell", "Pillow", "Wallet", "Charger", "Sunglasses", "Notebook"],
-  Movies: ["Titanic", "Inception", "Frozen", "Jaws", "Shrek", "Avatar", "Up", "Coco", "Moana", "Gladiator", "Matrix", "Toy Story"],
-  "TV Shows": ["Friends", "The Office", "Breaking Bad", "Stranger Things", "The Simpsons", "Money Heist", "Sherlock", "The Crown", "Squid Game", "Brooklyn Nine-Nine", "Peaky Blinders", "The Mandalorian"],
-  Food: ["Pizza", "Sushi", "Tacos", "Pancakes", "Spaghetti", "Popcorn", "Burger", "Dumplings", "Ice cream", "Waffles", "Curry", "Noodles"],
-  Sports: ["Basketball", "Surfing", "Tennis", "Boxing", "Skiing", "Archery", "Bowling", "Cricket", "Golf", "Rowing", "Fencing", "Volleyball"],
-  Jobs: ["Firefighter", "Astronaut", "Chef", "Dentist", "Pilot", "Farmer", "Photographer", "Electrician", "Lifeguard", "Tailor", "Librarian", "Zookeeper"],
-  Memes: ["Distracted boyfriend", "This is fine dog", "Doge", "Grumpy cat", "Rickroll", "Side-eye glance", "Crying at your desk", "Galaxy brain", "Slow clap", "Dramatic gasp", "Facepalm", "Mic drop"],
+  Animals: ["Elephant", "Penguin", "Octopus", "Giraffe", "Kangaroo", "Dolphin", "Cheetah", "Owl", "Platypus", "Flamingo", "Otter", "Peacock", "Koala", "Hedgehog", "Chameleon", "Walrus", "Raccoon", "Sloth", "Toucan", "Hippo", "Camel", "Squirrel", "Jellyfish", "Bat"],
+  "Daily Life": ["Toothbrush", "Umbrella", "Backpack", "Alarm clock", "Coffee mug", "Sneakers", "Doorbell", "Pillow", "Wallet", "Charger", "Sunglasses", "Notebook", "Keychain", "Toaster", "Hairbrush", "Flashlight", "Blanket", "Mirror", "Candle", "Calendar", "Stapler", "Thermos"],
+  Movies: ["Titanic", "Inception", "Frozen", "Jaws", "Shrek", "Avatar", "Up", "Coco", "Moana", "Gladiator", "Matrix", "Toy Story", "Jumanji", "Aladdin", "Tangled", "Cars", "Ratatouille", "Finding Nemo", "The Lion King", "Zootopia"],
+  "TV Shows": ["Friends", "The Office", "Breaking Bad", "Stranger Things", "The Simpsons", "Money Heist", "Sherlock", "The Crown", "Squid Game", "Brooklyn Nine-Nine", "Peaky Blinders", "The Mandalorian", "Ted Lasso", "Dark", "Wednesday", "Community"],
+  Food: ["Pizza", "Sushi", "Tacos", "Pancakes", "Spaghetti", "Popcorn", "Burger", "Dumplings", "Ice cream", "Waffles", "Curry", "Noodles", "Samosa", "Biryani", "Falafel", "Croissant", "Pretzel", "Sandwich", "Donut", "Fries"],
+  Sports: ["Basketball", "Surfing", "Tennis", "Boxing", "Skiing", "Archery", "Bowling", "Cricket", "Golf", "Rowing", "Fencing", "Volleyball", "Badminton", "Skateboarding", "Rock climbing", "Table tennis", "Rugby", "Karate"],
+  Jobs: ["Firefighter", "Astronaut", "Chef", "Dentist", "Pilot", "Farmer", "Photographer", "Electrician", "Lifeguard", "Tailor", "Librarian", "Zookeeper", "Surgeon", "Plumber", "Barber", "Journalist", "Beekeeper", "Vet"],
+  Memes: ["Distracted boyfriend", "This is fine dog", "Doge", "Grumpy cat", "Rickroll", "Side-eye glance", "Crying at your desk", "Galaxy brain", "Slow clap", "Dramatic gasp", "Facepalm", "Mic drop", "Surprised Pikachu", "Expanding brain", "Stonks", "Big chungus"],
+  "Desi Memes": ["Sparrow", "Bado Badi", "Cheepa Sahab", "Kaanpain Taang Gayein", "Pooja What Is This Behavior", "Fatima Ap Kesi Ho"],
+  "Bollywood Films": ["Sholay", "Dilwale Dulhania Le Jayenge", "3 Idiots", "Lagaan", "Dangal", "Zindagi Na Milegi Dobara", "Kabhi Khushi Kabhie Gham", "PK", "Kal Ho Naa Ho", "Bajrangi Bhaijaan", "Queen", "Andhadhun", "Gully Boy", "Barfi", "Chak De India"],
+  "Bollywood Songs": ["Tum Hi Ho", "Kal Ho Naa Ho", "Kesariya", "Jai Ho", "Chaiyya Chaiyya", "Tujhe Dekha To", "Gerua", "Channa Mereya", "Senorita", "Nagada Sang Dhol", "Tum Se Hi", "Zinda", "Malang", "Ghoomar"],
 };
 
 const CODENAMES_WORDS = ["Bridge", "Piano", "Comet", "Jungle", "Anchor", "Crown", "Marble", "Falcon", "Lantern", "Volcano", "Compass", "Velvet", "Rocket", "Glacier", "Harbor", "Thistle", "Mirror", "Ember", "Canyon", "Orbit", "Satin", "Beacon", "Ripple", "Quartz", "Nomad"];
@@ -166,6 +158,34 @@ const TRUTHS = [
   "Who do you think is the funniest person in this room, besides yourself?",
   "What's the most childish thing you still do?",
   "What's an unpopular opinion you hold that could start an argument?",
+  "What's the weirdest thing you've ever eaten?",
+  "What's a text you sent that you immediately wanted to unsend?",
+  "What's the most useless skill you have?",
+  "What's a school rumor about you that wasn't true?",
+  "Who's someone in this room you'd swap lives with for a day?",
+  "What's the last thing you lied about to a teacher or parent?",
+  "What's the most embarrassing autocorrect fail you've had?",
+  "What's a fear you have that you've never told anyone?",
+  "What's the weirdest compliment you've ever received?",
+  "What's a habit of yours that annoys your family?",
+  "What's the most dramatic thing you've done over something small?",
+  "Who's the last person you looked up out of pure jealousy?",
+  "What's something you do when you're alone that you'd never admit to?",
+  "What's the worst haircut or style choice you've ever had?",
+  "What's a class or subject you completely faked your way through?",
+  "What's the most embarrassing thing that's happened to you in public?",
+  "What's a nickname only your family uses for you?",
+  "What's the last white lie you told a friend?",
+  "What's something you're secretly really proud of?",
+  "What's the most awkward silence you've ever sat through?",
+  "What's a fear you had as a kid that seems ridiculous now?",
+  "What's the last thing you cried about?",
+  "What's a habit you're trying to break but keep failing at?",
+  "What's the weirdest thing you believed until embarrassingly recently?",
+  "What's something you say you hate but secretly enjoy?",
+  "Who's the last person whose photos you screenshotted, and why?",
+  "What's the most petty argument you've ever had with a friend?",
+  "What's a text or DM you've drafted but never sent?",
 ];
 
 const DARES = [
@@ -198,6 +218,27 @@ const DARES = [
   "Answer the next three questions in a whisper.",
   "Do your best superhero pose and hold it for 20 seconds.",
   "Let the group choose your ringtone for the rest of the night.",
+  "Do your best news anchor voice and report on something happening in the room right now.",
+  "Let the group pick an emoji you have to act out.",
+  "Do 10 seconds of the most dramatic slow-motion walk you can.",
+  "Try to say the alphabet while doing squats.",
+  "Do an impression of a baby learning to talk.",
+  "Let the group pose you like a statue for the next 30 seconds.",
+  "Speak in movie-trailer-voice for the next two answers.",
+  "Do your best impression of a robot ordering food.",
+  "Try to make a fake commercial for a random object nearby.",
+  "Let the group choose a fake accent for you to keep for 3 rounds.",
+  "Do your best impression of someone falling asleep mid-sentence.",
+  "Act like you just won an Oscar and give an acceptance speech.",
+  "Do your best impression of a cat stuck in a box.",
+  "Try to text using only emojis for your next message.",
+  "Do a dramatic villain laugh every time someone says your name for the next round.",
+  "Let the group direct you in a 15-second silent movie scene.",
+  "Do your best impersonation of a game show host introducing the next question.",
+  "Hold an invisible conversation on a fake phone call for 20 seconds.",
+  "Try to guess what's in someone's pocket/bag without looking, using only your hands.",
+  "Do your best impression of a weather reporter describing the room.",
+  "Speak like you're narrating a nature documentary about the group for one minute.",
 ];
 
 const WOULD_YOU_RATHER = [
@@ -371,10 +412,10 @@ const HOW_TO_PLAY = {
   truthdare: {
     steps: [
       "Add all the players.",
-      "Each round picks a random player.",
-      "They choose Truth or Dare.",
+      "Spin the wheel — whoever it lands on chooses Truth or Dare.",
+      "Using a physical bottle instead? Tap 'Skip straight to Truth or Dare' to bypass the wheel entirely.",
       "Answer honestly, or complete the dare — group's honor system enforces it.",
-      "Tap Next player to keep the game going as long as you like.",
+      "Spin (or skip) again to keep the game going as long as you like.",
     ],
   },
   charades: {
@@ -1157,7 +1198,8 @@ function TruthDareGame({ theme, onExit, friends, groups }) {
     setPrompt(bank[i]); setChoice(type);
   };
 
-  const nextTurn = () => { setChoice(null); setPrompt(""); setRound((r) => r + 1); setPhase("wheel"); };
+  const nextTurn = () => { setChoice(null); setPrompt(""); setCurrent(null); setRound((r) => r + 1); setPhase("wheel"); };
+  const quickPick = () => { setCurrent(null); setChoice(null); setPrompt(""); setPhase("chosen"); };
 
   if (!players) {
     return (
@@ -1170,13 +1212,23 @@ function TruthDareGame({ theme, onExit, friends, groups }) {
     <div>
       <ScreenHeader theme={theme} title="Truth & Dare" subtitle={`Round ${round}`} onBack={() => { setLastPlayers(players); setPlayers(null); }} />
       {phase !== "chosen" ? (
-        <SpinWheel theme={theme} players={players} gameColor="#e5772d" stage={spinStage} rotation={rotation} onSpin={spin} />
+        <>
+          <SpinWheel theme={theme} players={players} gameColor="#e5772d" stage={spinStage} rotation={rotation} onSpin={spin} />
+          <button
+            onClick={quickPick}
+            style={{ display: "block", margin: "4px auto 0", background: "transparent", border: "none", color: theme.textDim, fontFamily: "Inter, sans-serif", fontSize: 12.5, textDecoration: "underline", cursor: "pointer" }}
+          >
+            Using a bottle to pick? Skip straight to Truth or Dare
+          </button>
+        </>
       ) : (
         <>
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>The wheel picked</div>
-            <div style={{ fontFamily: theme.font, fontSize: 32, fontWeight: 700, color: "#e5772d" }}>{current}</div>
-          </div>
+          {current && (
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 11, color: theme.textDim, fontFamily: "Inter, sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>The wheel picked</div>
+              <div style={{ fontFamily: theme.font, fontSize: 32, fontWeight: 700, color: "#e5772d" }}>{current}</div>
+            </div>
+          )}
           {!choice ? (
             <div style={{ display: "flex", gap: 12 }}>
               <Button theme={theme} onClick={() => pick("truth")} style={{ flex: 1, padding: "20px", background: theme.surfaceAlt, color: theme.text, border: `1px solid ${theme.border}` }}>Truth</Button>
@@ -1188,7 +1240,7 @@ function TruthDareGame({ theme, onExit, friends, groups }) {
               <p style={{ fontFamily: theme.font, fontSize: 19, color: theme.text, lineHeight: 1.5, margin: 0 }}>{prompt}</p>
             </Card>
           )}
-          {choice && <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", marginTop: 20, background: "#e5772d", color: "#1c1310" }}>Spin for next player</Button>}
+          {choice && <Button theme={theme} onClick={nextTurn} icon={Shuffle} style={{ width: "100%", marginTop: 20, background: "#e5772d", color: "#1c1310" }}>{current ? "Spin for next player" : "Ready for the next one"}</Button>}
         </>
       )}
     </div>
@@ -1958,10 +2010,6 @@ export default function App() {
     </div>
   );
 }
-
-
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
 
 </script>
 
