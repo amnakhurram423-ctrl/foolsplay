@@ -3,7 +3,7 @@
 // here — so a flaky or dead connection later (like spotty classroom wifi)
 // no longer stops the app from opening.
 
-const CACHE_NAME = "gamebox-cache-v1";
+const CACHE_NAME = "gamebox-cache-v2";
 
 const PRECACHE_URLS = [
   "./",
@@ -19,6 +19,7 @@ const PRECACHE_URLS = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
+      // Cache what we can; don't let one failed URL (e.g. a font subset) block install.
       Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url)))
     )
   );
@@ -34,6 +35,9 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Cache-first for everything this app needs, with a network update happening
+// in the background when possible (stale-while-revalidate) so the app stays
+// current when there IS a connection, but never blocks on one.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
